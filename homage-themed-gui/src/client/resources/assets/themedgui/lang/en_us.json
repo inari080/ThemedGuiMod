@@ -1,4 +1,5 @@
 {
 	"key.category.themedgui.general": "Themed GUI",
-	"key.themedgui.open_config": "Open Config"
+	"key.themedgui.open_config": "Open Config",
+	"key.themedgui.toggle_auto_mining": "Toggle Auto Mining"
 }
