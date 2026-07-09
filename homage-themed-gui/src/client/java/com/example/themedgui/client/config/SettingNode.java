@@ -104,4 +104,12 @@ public class SettingNode {
         String raw = value.name().toLowerCase().replace('_', ' ');
         return Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
     }
+
+    // --- ACTION (backed by a Runnable field, e.g. "Edit HUD position") ---
+    public void runAction() {
+        try {
+            Object value = field.get(holder);
+            if (value instanceof Runnable runnable) runnable.run();
+        } catch (IllegalAccessException ignored) {}
+    }
 }

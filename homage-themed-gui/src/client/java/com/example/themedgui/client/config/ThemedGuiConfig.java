@@ -19,4 +19,7 @@ public class ThemedGuiConfig {
 
     @Setting(category = "Appearance", label = "Overlay position")
     public OverlayPosition overlayPosition = OverlayPosition.TOP_LEFT;
+
+    @Setting(category = "Appearance", label = "Edit HUD position", tooltip = "Drag the overlay directly to where you want it")
+    public Runnable editHudPosition = () -> {};
 }

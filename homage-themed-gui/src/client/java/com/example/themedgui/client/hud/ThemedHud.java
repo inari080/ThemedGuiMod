@@ -23,14 +23,21 @@ public class ThemedHud {
         int screenH = Minecraft.getInstance().getWindow().getGuiScaledHeight();
         int margin = 10;
 
-        int x = switch (config.overlayPosition) {
-            case TOP_LEFT, BOTTOM_LEFT -> margin;
-            case TOP_RIGHT, BOTTOM_RIGHT -> screenW - w - margin;
-        };
-        int y = switch (config.overlayPosition) {
-            case TOP_LEFT, TOP_RIGHT -> margin;
-            case BOTTOM_LEFT, BOTTOM_RIGHT -> screenH - h - margin;
-        };
+        int x, y;
+        if (OverlayPositionStore.hasCustomPosition()) {
+            // Dragged position, from OverlayPositionScreen - clamp in case the window resized since.
+            x = Math.max(0, Math.min(screenW - w, OverlayPositionStore.x()));
+            y = Math.max(0, Math.min(screenH - h, OverlayPositionStore.y()));
+        } else {
+            x = switch (config.overlayPosition) {
+                case TOP_LEFT, BOTTOM_LEFT -> margin;
+                case TOP_RIGHT, BOTTOM_RIGHT -> screenW - w - margin;
+            };
+            y = switch (config.overlayPosition) {
+                case TOP_LEFT, TOP_RIGHT -> margin;
+                case BOTTOM_LEFT, BOTTOM_RIGHT -> screenH - h - margin;
+            };
+        }
 
         graphics.fill(x, y, x + w, y + h, color);
     }

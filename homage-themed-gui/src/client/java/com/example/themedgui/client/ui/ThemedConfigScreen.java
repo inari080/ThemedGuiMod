@@ -217,6 +217,13 @@ public class ThemedConfigScreen extends Screen {
 					int textWidth = this.font.width(value);
 					graphics.text(this.font, value, rowRight - 4 - textWidth, rowY + 6,
 							withAlpha(palette.mutedText(), alpha), false);
+				} else if (node.kind() == SettingNode.Kind.ACTION) {
+					String actionLabel = "Open";
+					int chipW = this.font.width(actionLabel) + 12;
+					int chipX = rowRight - chipW;
+					graphics.fill(chipX, rowY + 2, rowRight, rowY + ROW_HEIGHT - 6, withAlpha(palette.accentSoft(), alpha));
+					graphics.outline(chipX, rowY + 2, chipW, ROW_HEIGHT - 8, withAlpha(palette.accent(), alpha));
+					graphics.text(this.font, actionLabel, chipX + 6, rowY + 6, withAlpha(palette.text(), alpha), false);
 				}
 
 				// Subtle row separator
@@ -322,6 +329,9 @@ public class ThemedConfigScreen extends Screen {
 			} else if (node.kind() == SettingNode.Kind.ENUM) {
 				node.cycleEnum(1);
 				registry.save();
+				return true;
+			} else if (node.kind() == SettingNode.Kind.ACTION) {
+				node.runAction();
 				return true;
 			}
 		}

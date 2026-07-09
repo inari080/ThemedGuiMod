@@ -42,8 +42,10 @@ public class SettingRegistry {
                 kind = SettingNode.Kind.SLIDER;
             } else if (type.isEnum()) {
                 kind = SettingNode.Kind.ENUM;
+            } else if (Runnable.class.isAssignableFrom(type)) {
+                kind = SettingNode.Kind.ACTION;
             } else {
-                continue; // TEXT / ACTION can be added later the same way
+                continue; // TEXT can be added later the same way
             }
 
             SettingNode node = new SettingNode(holder, field, ann.category(), ann.label(),
