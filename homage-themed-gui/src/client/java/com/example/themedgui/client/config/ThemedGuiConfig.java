@@ -29,4 +29,3 @@ public class ThemedGuiConfig {
     @Setting(category = "Appearance", label = "UI Settings", tooltip = "Open the theme picker with live palette previews")
     public Runnable openUiSettings = () -> {};
 }
-

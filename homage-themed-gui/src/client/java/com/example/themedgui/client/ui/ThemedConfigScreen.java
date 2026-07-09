@@ -26,6 +26,8 @@ public class ThemedConfigScreen extends Screen {
 	private static final int SEARCH_BOX_WIDTH = 150;
 	private static final long CATEGORY_SLIDE_MS = 180;
 	private static final int CATEGORY_SLIDE_DISTANCE = 22;
+	private static final int SECTION_HEADER_HEIGHT = 28;
+	private static final int LOGO_HEIGHT = 60;
 
 	private final Screen parent;
 	private final SettingRegistry registry;
@@ -53,6 +55,13 @@ public class ThemedConfigScreen extends Screen {
 	private record Layout(int contentX, int contentY, int contentW, int contentH, List<SettingNode> rows, int maxScroll) {
 		int rowRight() {
 			return contentX + contentW - SCROLLBAR_GUTTER;
+		}
+	}
+
+	/** Logo area at the top of the sidebar */
+	private record LogoArea(int x, int y, int width, int height) {
+		boolean isInside(int px, int py) {
+			return px >= x && px < x + width && py >= y && py < y + height;
 		}
 	}
 
@@ -129,7 +138,17 @@ public class ThemedConfigScreen extends Screen {
 		int contentY = sidebarY;
 		int contentW = panelW - SIDEBAR_WIDTH;
 		int contentH = sidebarH;
-		int maxScroll = Math.max(0, rows.size() * ROW_HEIGHT - contentH);
+
+		// Calculate total height including section headers
+		int totalHeight = 0;
+		for (SettingNode node : rows) {
+			if (node.kind() == SettingNode.Kind.SECTION_HEADER) {
+				totalHeight += SECTION_HEADER_HEIGHT;
+			} else {
+				totalHeight += ROW_HEIGHT;
+			}
+		}
+		int maxScroll = Math.max(0, totalHeight - contentH);
 		return new Layout(contentX, contentY, contentW, contentH, rows, maxScroll);
 	}
 
@@ -191,8 +210,18 @@ public class ThemedConfigScreen extends Screen {
 			// Divider between sidebar and content
 			graphics.fill(sidebarX + SIDEBAR_WIDTH - 1, sidebarY, sidebarX + SIDEBAR_WIDTH, sidebarY + sidebarH, withAlpha(palette.line(), alpha));
 
+			// Draw logo area at top of sidebar
+			int logoY = sidebarY + 8;
+			int logoW = SIDEBAR_WIDTH - 16;
+			int logoH = LOGO_HEIGHT;
+			graphics.fill(sidebarX + 8, logoY, sidebarX + 8 + logoW, logoY + logoH, withAlpha(palette.hover(), alpha * 0.4f));
+			graphics.outline(sidebarX + 8, logoY, logoW, logoH, withAlpha(palette.accent(), alpha * 0.6f));
+			// Draw "JR" style text placeholder with larger font effect
+			graphics.text(this.font, "JR", sidebarX + SIDEBAR_WIDTH / 2 - this.font.width("JR") / 2, logoY + logoH / 2 - this.font.lineHeight / 2 + 2, withAlpha(palette.accent(), alpha), false);
+
+			int categoryStartY = logoY + logoH + 12;
 			for (int i = 0; i < categories.size(); i++) {
-				int rowY = sidebarY + 8 + i * ROW_HEIGHT;
+				int rowY = categoryStartY + i * ROW_HEIGHT;
 				boolean isSelected = !searching && i == selectedCategory;
 				boolean isHovered = !isSelected && isInside(mouseX, mouseY, sidebarX, rowY, SIDEBAR_WIDTH, ROW_HEIGHT);
 
@@ -230,15 +259,27 @@ public class ThemedConfigScreen extends Screen {
 
 			graphics.enableScissor(contentX, contentY, contentX + contentW, contentY + contentH);
 			int scrollY = scroll.tick(layout.maxScroll());
+			int currentY = contentY + 8 - scrollY;
 			for (int i = 0; i < rows.size(); i++) {
 				SettingNode node = rows.get(i);
-				int baseRowY = contentY + 8 + i * ROW_HEIGHT - scrollY;
-				if (baseRowY + ROW_HEIGHT < contentY || baseRowY > contentY + contentH) {
+				int rowHeight = node.kind() == SettingNode.Kind.SECTION_HEADER ? SECTION_HEADER_HEIGHT : ROW_HEIGHT;
+				int baseRowY = currentY;
+
+				if (baseRowY + rowHeight < contentY || baseRowY > contentY + contentH) {
+					currentY += rowHeight;
 					continue;
 				}
 				int rowY = baseRowY;
 				int rowX = slideOffsetX;
 				float rowAlphaMul = alpha * catAlpha;
+
+				if (node.kind() == SettingNode.Kind.SECTION_HEADER) {
+					// Render section header
+					graphics.fill(contentX + 8 + rowX, rowY, rowRight + rowX, rowY + SECTION_HEADER_HEIGHT - 4, withAlpha(palette.header(), rowAlphaMul * 0.5f));
+					graphics.text(this.font, node.label().toUpperCase(), contentX + 14 + rowX, rowY + 8, withAlpha(palette.accent(), rowAlphaMul), false);
+					currentY += rowHeight;
+					continue;
+				}
 
 				// Hit-testing uses the un-slid position so clicks feel right even mid-animation.
 				boolean isHovered = isInside(mouseX, mouseY, contentX + 8, rowY, rowRight - contentX - 8, ROW_HEIGHT - 4);
@@ -258,6 +299,7 @@ public class ThemedConfigScreen extends Screen {
 
 				String label = searching ? "[" + node.category() + "] " + node.label() : node.label();
 				graphics.text(this.font, label, contentX + 14 + rowX, rowY + 6, withAlpha(palette.text(), rowAlphaMul), false);
+				currentY += rowHeight;
 
 				if (node.kind() == SettingNode.Kind.TOGGLE) {
 					boolean on = node.getBoolean();
@@ -357,7 +399,7 @@ public class ThemedConfigScreen extends Screen {
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
 		Layout layout = layout();
-		scroll.addDelta((int) (-verticalAmount * ROW_HEIGHT), layout.maxScroll());
+		scroll.addDelta((int) (-verticalAmount * ROW_HEIGHT * 1.5), layout.maxScroll());
 		return true;
 	}
 
@@ -368,9 +410,18 @@ public class ThemedConfigScreen extends Screen {
 		List<String> categories = registry.categories();
 
 		int panelX = 20;
-		int sidebarY = 20 + HEADER_HEIGHT;
+		int panelY = 20;
+		int panelH = this.height - 40;
+		int sidebarY = panelY + HEADER_HEIGHT;
+		int sidebarH = panelH - HEADER_HEIGHT;
+
+		// Adjust category start Y to account for logo
+		int logoY = sidebarY + 8;
+		int logoH = LOGO_HEIGHT;
+		int categoryStartY = logoY + logoH + 12;
+
 		for (int i = 0; i < categories.size(); i++) {
-			int rowY = sidebarY + 8 + i * ROW_HEIGHT;
+			int rowY = categoryStartY + i * ROW_HEIGHT;
 			if (isInside(mouseX, mouseY, panelX, rowY, SIDEBAR_WIDTH, ROW_HEIGHT)) {
 				if (i != selectedCategory) {
 					categorySlideDir = i > selectedCategory ? 1 : -1;
@@ -403,11 +454,24 @@ public class ThemedConfigScreen extends Screen {
 		int contentY = layout.contentY();
 		int rowRight = layout.rowRight();
 
+		// Calculate row positions accounting for section headers
+		int currentY = contentY + 8 - scrollY;
 		for (int i = 0; i < rows.size(); i++) {
-			int rowY = contentY + 8 + i * ROW_HEIGHT - scrollY;
-			if (!isInside(mouseX, mouseY, contentX + 8, rowY, rowRight - contentX - 8, ROW_HEIGHT - 4)) continue;
-
 			SettingNode node = rows.get(i);
+			int rowHeight = node.kind() == SettingNode.Kind.SECTION_HEADER ? SECTION_HEADER_HEIGHT : ROW_HEIGHT;
+			int rowY = currentY;
+
+			// Skip section headers for click handling
+			if (node.kind() == SettingNode.Kind.SECTION_HEADER) {
+				currentY += rowHeight;
+				continue;
+			}
+
+			if (!isInside(mouseX, mouseY, contentX + 8, rowY, rowRight - contentX - 8, ROW_HEIGHT - 4)) {
+				currentY += rowHeight;
+				continue;
+			}
+
 			if (node.kind() == SettingNode.Kind.TOGGLE) {
 				node.toggle();
 				registry.save();
@@ -435,6 +499,7 @@ public class ThemedConfigScreen extends Screen {
 				}
 				return true;
 			}
+			currentY += rowHeight;
 		}
 
 		return super.mouseClicked(event, doubleClick);

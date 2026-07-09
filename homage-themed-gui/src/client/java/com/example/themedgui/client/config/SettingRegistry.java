@@ -36,7 +36,9 @@ public class SettingRegistry {
 
             SettingNode.Kind kind;
             Class<?> type = field.getType();
-            if (type == boolean.class) {
+            if (ann.sectionHeader()) {
+                kind = SettingNode.Kind.SECTION_HEADER;
+            } else if (type == boolean.class) {
                 kind = SettingNode.Kind.TOGGLE;
             } else if (type == int.class && ann.color()) {
                 kind = SettingNode.Kind.COLOR;

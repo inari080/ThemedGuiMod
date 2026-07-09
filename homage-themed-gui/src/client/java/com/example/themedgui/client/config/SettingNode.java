@@ -4,7 +4,7 @@ import java.lang.reflect.Field;
 
 public class SettingNode {
 
-    public enum Kind { TOGGLE, SLIDER, TEXT, ACTION, ENUM, COLOR }
+    public enum Kind { TOGGLE, SLIDER, TEXT, ACTION, ENUM, COLOR, SECTION_HEADER }
 
     private final Object holder;
     private final Field field;
