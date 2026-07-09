@@ -5,16 +5,16 @@ public class ThemedGuiConfig {
 
     public enum OverlayPosition { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
 
-    @Setting(category = "General", label = "Enable overlay")
+    @Setting(category = "General", label = "Enable overlay", tooltip = "Toggles the HUD overlay box on or off entirely")
     public boolean enableOverlay = true;
 
-    @Setting(category = "General", label = "Show minimap")
+    @Setting(category = "General", label = "Show minimap", tooltip = "Reserved for a future minimap overlay")
     public boolean showMinimap = false;
 
-    @Setting(category = "Appearance", label = "HUD scale", min = 0.5, max = 2.0)
+    @Setting(category = "Appearance", label = "HUD scale", tooltip = "Scales the overlay box size, 0.5x - 2.0x", min = 0.5, max = 2.0)
     public float hudScale = 1.0f;
 
-    @Setting(category = "Appearance", label = "Opacity", min = 0, max = 255)
+    @Setting(category = "Appearance", label = "Opacity", tooltip = "Overlay transparency, 0 = invisible, 255 = solid", min = 0, max = 255)
     public int opacity = 200;
 
     @Setting(category = "Appearance", label = "Overlay position")

@@ -17,6 +17,7 @@ public class ThemedConfigScreen extends Screen {
 	private static final int HEADER_HEIGHT = 28;
 	private static final int SLIDER_WIDTH = 70;
 	private static final int SLIDER_RIGHT_MARGIN = 84;
+	private static final int TOOLTIP_PADDING = 4;
 
 	private final Screen parent;
 	private final SettingRegistry registry;
@@ -28,6 +29,7 @@ public class ThemedConfigScreen extends Screen {
 	private Button themeButton;
 	private int lastScrollY = 0;
 	private SettingNode draggingSlider = null;
+	private String hoveredTooltip = null;
 
 	public ThemedConfigScreen(Screen parent, SettingRegistry registry) {
 		super(Component.literal("Themed GUI Demo"));
@@ -55,6 +57,8 @@ public class ThemedConfigScreen extends Screen {
 		List<SettingNode> rows = categories.isEmpty()
 				? List.of() : registry.nodes(categories.get(selectedCategory));
 
+		hoveredTooltip = null;
+
 		graphics.fill(0, 0, this.width, this.height, withAlpha(palette.backdrop(), transition.currentAlpha()));
 
 		transition.push(graphics);
@@ -68,13 +72,17 @@ public class ThemedConfigScreen extends Screen {
 			graphics.fill(panelX, panelY, panelX + panelW, panelY + panelH, withAlpha(palette.panel(), alpha));
 			graphics.outline(panelX, panelY, panelW, panelH, withAlpha(palette.panelBorder(), alpha));
 
-			graphics.fill(panelX, panelY, panelX + panelW, panelY + HEADER_HEIGHT, withAlpha(palette.sidebar(), alpha));
+			// Header bar
+			graphics.fill(panelX, panelY, panelX + panelW, panelY + HEADER_HEIGHT, withAlpha(palette.header(), alpha));
 			graphics.text(this.font, this.title, panelX + 12, panelY + 10, withAlpha(palette.text(), alpha), false);
+			graphics.fill(panelX, panelY + HEADER_HEIGHT - 1, panelX + panelW, panelY + HEADER_HEIGHT, withAlpha(palette.line(), alpha));
 
 			int sidebarX = panelX;
 			int sidebarY = panelY + HEADER_HEIGHT;
 			int sidebarH = panelH - HEADER_HEIGHT;
 			graphics.fill(sidebarX, sidebarY, sidebarX + SIDEBAR_WIDTH, sidebarY + sidebarH, withAlpha(palette.sidebar(), alpha));
+			// Divider between sidebar and content
+			graphics.fill(sidebarX + SIDEBAR_WIDTH - 1, sidebarY, sidebarX + SIDEBAR_WIDTH, sidebarY + sidebarH, withAlpha(palette.line(), alpha));
 
 			for (int i = 0; i < categories.size(); i++) {
 				int rowY = sidebarY + 8 + i * ROW_HEIGHT;
@@ -94,6 +102,9 @@ public class ThemedConfigScreen extends Screen {
 			int contentH = sidebarH;
 			int maxScroll = Math.max(0, rows.size() * ROW_HEIGHT - contentH);
 
+			// Paper backdrop for the scrollable content area, distinct from the panel itself
+			graphics.fill(contentX, contentY, contentX + contentW, contentY + contentH, withAlpha(palette.paper(), alpha));
+
 			graphics.enableScissor(contentX, contentY, contentX + contentW, contentY + contentH);
 			int scrollY = scroll.tick(maxScroll);
 			lastScrollY = scrollY;
@@ -106,6 +117,9 @@ public class ThemedConfigScreen extends Screen {
 				boolean isHovered = isInside(mouseX, mouseY, contentX + 8, rowY, contentW - 16, ROW_HEIGHT - 4);
 				if (isHovered) {
 					graphics.fill(contentX + 8, rowY, contentX + contentW - 8, rowY + ROW_HEIGHT - 4, withAlpha(palette.hover(), alpha));
+					if (!node.tooltip().isEmpty()) {
+						hoveredTooltip = node.tooltip();
+					}
 				}
 				graphics.text(this.font, node.label(), contentX + 14, rowY + 6, withAlpha(palette.text(), alpha), false);
 
@@ -116,14 +130,25 @@ public class ThemedConfigScreen extends Screen {
 					graphics.fill(pillX, rowY + 3, pillX + 28, rowY + 15, withAlpha(pillColor, alpha));
 				} else if (node.kind() == SettingNode.Kind.SLIDER) {
 					int barX = contentX + contentW - SLIDER_RIGHT_MARGIN;
-					graphics.fill(barX, rowY + 8, barX + SLIDER_WIDTH, rowY + 11, withAlpha(palette.toggleOff(), alpha));
+					// Track sits on a field chip so it reads as a distinct control surface
+					graphics.fill(barX - 3, rowY + 5, barX + SLIDER_WIDTH + 3, rowY + 14, withAlpha(palette.field(), alpha));
+					graphics.fill(barX, rowY + 8, barX + SLIDER_WIDTH, rowY + 11, withAlpha(palette.accentSoft(), alpha));
 					int fillW = (int) (SLIDER_WIDTH * node.getRatio());
 					graphics.fill(barX, rowY + 8, barX + fillW, rowY + 11, withAlpha(palette.toggleOn(), alpha));
+					// value shown just left of the track, on field text color
+					String valueLabel = formatSliderValue(node);
+					int valueWidth = this.font.width(valueLabel);
+					graphics.text(this.font, valueLabel, barX - 8 - valueWidth, rowY + 6, withAlpha(palette.fieldText(), alpha), false);
 				} else if (node.kind() == SettingNode.Kind.ENUM) {
 					String value = node.enumValueLabel();
 					int textWidth = this.font.width(value);
 					graphics.text(this.font, value, contentX + contentW - 12 - textWidth, rowY + 6,
 							withAlpha(palette.mutedText(), alpha), false);
+				}
+
+				// Subtle row separator
+				if (i < rows.size() - 1) {
+					graphics.fill(contentX + 8, rowY + ROW_HEIGHT - 4, contentX + contentW - 8, rowY + ROW_HEIGHT - 3, withAlpha(palette.mutedLine(), alpha));
 				}
 			}
 			graphics.disableScissor();
@@ -132,9 +157,27 @@ public class ThemedConfigScreen extends Screen {
 
 		super.extractRenderState(graphics, mouseX, mouseY, delta);
 
+		if (hoveredTooltip != null) {
+			drawTooltip(graphics, palette, hoveredTooltip, mouseX, mouseY);
+		}
+
 		if (transition.finishCloseIfReady() && this.minecraft != null) {
 			this.minecraft.setScreen(parent);
 		}
+	}
+
+	private void drawTooltip(GuiGraphicsExtractor graphics, UiPalette palette, String text, int mouseX, int mouseY) {
+		int textWidth = this.font.width(text);
+		int boxW = textWidth + TOOLTIP_PADDING * 2;
+		int boxH = this.font.lineHeight + TOOLTIP_PADDING * 2;
+		int x = mouseX + 12;
+		int y = mouseY - boxH - 6;
+		if (x + boxW > this.width) x = this.width - boxW - 2;
+		if (y < 0) y = mouseY + 16;
+
+		graphics.fill(x, y, x + boxW, y + boxH, palette.tooltipBack());
+		graphics.outline(x, y, boxW, boxH, palette.line());
+		graphics.text(this.font, text, x + TOOLTIP_PADDING, y + TOOLTIP_PADDING, palette.tooltipText(), false);
 	}
 
 	@Override
@@ -158,6 +201,7 @@ public class ThemedConfigScreen extends Screen {
 			int rowY = sidebarY + 8 + i * ROW_HEIGHT;
 			if (isInside(mouseX, mouseY, panelX, rowY, SIDEBAR_WIDTH, ROW_HEIGHT)) {
 				selectedCategory = i;
+				scroll.jumpTo(0);
 				return true;
 			}
 		}
@@ -230,6 +274,13 @@ public class ThemedConfigScreen extends Screen {
 	@Override
 	public boolean isPauseScreen() {
 		return false;
+	}
+
+	/** Ints show as whole numbers; floats show one decimal place (e.g. HUD scale 0.5-2.0). */
+	private static String formatSliderValue(SettingNode node) {
+		double value = node.getNumber();
+		boolean wholeRange = node.min() == Math.floor(node.min()) && node.max() == Math.floor(node.max()) && node.max() - node.min() > 2;
+		return wholeRange ? String.valueOf(Math.round(value)) : String.format("%.1f", value);
 	}
 
 	private static boolean isInside(int px, int py, int x, int y, int w, int h) {
