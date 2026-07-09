@@ -1,0 +1,24 @@
+{
+	"schemaVersion": 1,
+	"id": "themedgui",
+	"version": "${version}",
+	"name": "Themed GUI (Homage Demo)",
+	"description": "A minimal example mod demonstrating a themeable, smoothly-animated config screen for Minecraft 26.1.2 / Fabric.",
+	"authors": [
+		"Your Name Here"
+	],
+	"contact": {},
+	"license": "CC0-1.0",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.example.themedgui.client.ThemedGuiModClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.18.0",
+		"minecraft": "~26.1",
+		"fabric-api": "*",
+		"java": ">=25"
+	}
+}
