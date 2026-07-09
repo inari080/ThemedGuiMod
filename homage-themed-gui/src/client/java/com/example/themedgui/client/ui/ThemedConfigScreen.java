@@ -4,11 +4,14 @@ import com.example.themedgui.client.config.SettingNode;
 import com.example.themedgui.client.config.SettingRegistry;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class ThemedConfigScreen extends Screen {
 
@@ -16,8 +19,11 @@ public class ThemedConfigScreen extends Screen {
 	private static final int ROW_HEIGHT = 22;
 	private static final int HEADER_HEIGHT = 28;
 	private static final int SLIDER_WIDTH = 70;
-	private static final int SLIDER_RIGHT_MARGIN = 84;
 	private static final int TOOLTIP_PADDING = 4;
+	private static final int SCROLLBAR_WIDTH = 6;
+	private static final int SCROLLBAR_GUTTER = 16; // right-side space reserved for the scrollbar
+	private static final int SCROLLBAR_MIN_THUMB = 20;
+	private static final int SEARCH_BOX_WIDTH = 150;
 
 	private final Screen parent;
 	private final SettingRegistry registry;
@@ -27,9 +33,17 @@ public class ThemedConfigScreen extends Screen {
 	private UiTheme theme = UiTheme.DARK;
 	private int selectedCategory = 0;
 	private Button themeButton;
-	private int lastScrollY = 0;
+	private EditBox searchBox;
 	private SettingNode draggingSlider = null;
+	private boolean draggingScrollbar = false;
 	private String hoveredTooltip = null;
+
+	/** Precomputed once per frame/interaction so render and input handling never disagree on geometry. */
+	private record Layout(int contentX, int contentY, int contentW, int contentH, List<SettingNode> rows, int maxScroll) {
+		int rowRight() {
+			return contentX + contentW - SCROLLBAR_GUTTER;
+		}
+	}
 
 	public ThemedConfigScreen(Screen parent, SettingRegistry registry) {
 		super(Component.literal("Themed GUI Demo"));
@@ -44,18 +58,71 @@ public class ThemedConfigScreen extends Screen {
 			btn.setMessage(themeButtonLabel());
 		}).bounds(this.width - 116, 8, 108, 20).build();
 		this.addRenderableWidget(themeButton);
+
+		searchBox = new EditBox(this.font, this.width - 116 - 8 - SEARCH_BOX_WIDTH, 8, SEARCH_BOX_WIDTH, 20,
+				Component.literal("Search"));
+		searchBox.setSuggestion("Search settings...");
+		searchBox.setResponder(value -> scroll.jumpTo(0));
+		this.addRenderableWidget(searchBox);
 	}
 
 	private Component themeButtonLabel() {
 		return Component.literal("Theme: " + theme.getDisplayName());
 	}
 
+	private boolean isSearching() {
+		return searchBox != null && !searchBox.getValue().trim().isEmpty();
+	}
+
+	/** Rows to display: the selected category normally, or a flattened cross-category match list while searching. */
+	private List<SettingNode> currentRows(List<String> categories) {
+		if (!isSearching()) {
+			return categories.isEmpty() ? List.of() : registry.nodes(categories.get(selectedCategory));
+		}
+		String needle = searchBox.getValue().trim().toLowerCase(Locale.ROOT);
+		List<SettingNode> matches = new ArrayList<>();
+		for (SettingNode node : registry.allNodes()) {
+			if (node.label().toLowerCase(Locale.ROOT).contains(needle)
+					|| node.category().toLowerCase(Locale.ROOT).contains(needle)) {
+				matches.add(node);
+			}
+		}
+		return matches;
+	}
+
+	private Layout layout() {
+		List<String> categories = registry.categories();
+		List<SettingNode> rows = currentRows(categories);
+		int panelX = 20;
+		int panelY = 20;
+		int panelW = this.width - 40;
+		int panelH = this.height - 40;
+		int sidebarY = panelY + HEADER_HEIGHT;
+		int sidebarH = panelH - HEADER_HEIGHT;
+		int contentX = panelX + SIDEBAR_WIDTH;
+		int contentY = sidebarY;
+		int contentW = panelW - SIDEBAR_WIDTH;
+		int contentH = sidebarH;
+		int maxScroll = Math.max(0, rows.size() * ROW_HEIGHT - contentH);
+		return new Layout(contentX, contentY, contentW, contentH, rows, maxScroll);
+	}
+
+	/** Returns {thumbY, thumbH}, or null if the list fits and no scrollbar should be drawn. */
+	private int[] scrollbarThumb(Layout layout, int scrollY) {
+		if (layout.maxScroll() <= 0) return null;
+		int totalHeight = layout.contentH() + layout.maxScroll();
+		int thumbH = Math.max(SCROLLBAR_MIN_THUMB, layout.contentH() * layout.contentH() / totalHeight);
+		int available = layout.contentH() - thumbH;
+		int thumbY = layout.contentY() + (available > 0 ? Math.round((float) scrollY * available / layout.maxScroll()) : 0);
+		return new int[]{thumbY, thumbH};
+	}
+
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
 		UiPalette palette = UiPalette.forTheme(theme);
 		List<String> categories = registry.categories();
-		List<SettingNode> rows = categories.isEmpty()
-				? List.of() : registry.nodes(categories.get(selectedCategory));
+		Layout layout = layout();
+		boolean searching = isSearching();
 
 		hoveredTooltip = null;
 
@@ -86,7 +153,7 @@ public class ThemedConfigScreen extends Screen {
 
 			for (int i = 0; i < categories.size(); i++) {
 				int rowY = sidebarY + 8 + i * ROW_HEIGHT;
-				boolean isSelected = i == selectedCategory;
+				boolean isSelected = !searching && i == selectedCategory;
 				boolean isHovered = !isSelected && isInside(mouseX, mouseY, sidebarX, rowY, SIDEBAR_WIDTH, ROW_HEIGHT);
 				int rowColor = isSelected ? palette.selected() : (isHovered ? palette.hover() : 0);
 				if (rowColor != 0) {
@@ -96,40 +163,46 @@ public class ThemedConfigScreen extends Screen {
 				graphics.text(this.font, categories.get(i), sidebarX + 12, rowY + 6, withAlpha(textColor, alpha), false);
 			}
 
-			int contentX = panelX + SIDEBAR_WIDTH;
-			int contentY = sidebarY;
-			int contentW = panelW - SIDEBAR_WIDTH;
-			int contentH = sidebarH;
-			int maxScroll = Math.max(0, rows.size() * ROW_HEIGHT - contentH);
+			int contentX = layout.contentX();
+			int contentY = layout.contentY();
+			int contentW = layout.contentW();
+			int contentH = layout.contentH();
+			int rowRight = layout.rowRight();
+			List<SettingNode> rows = layout.rows();
 
 			// Paper backdrop for the scrollable content area, distinct from the panel itself
 			graphics.fill(contentX, contentY, contentX + contentW, contentY + contentH, withAlpha(palette.paper(), alpha));
 
+			if (searching && rows.isEmpty()) {
+				String message = "No settings found";
+				graphics.text(this.font, message, contentX + 14, contentY + 10, withAlpha(palette.mutedText(), alpha), false);
+			}
+
 			graphics.enableScissor(contentX, contentY, contentX + contentW, contentY + contentH);
-			int scrollY = scroll.tick(maxScroll);
-			lastScrollY = scrollY;
+			int scrollY = scroll.tick(layout.maxScroll());
 			for (int i = 0; i < rows.size(); i++) {
 				SettingNode node = rows.get(i);
 				int rowY = contentY + 8 + i * ROW_HEIGHT - scrollY;
 				if (rowY + ROW_HEIGHT < contentY || rowY > contentY + contentH) {
 					continue;
 				}
-				boolean isHovered = isInside(mouseX, mouseY, contentX + 8, rowY, contentW - 16, ROW_HEIGHT - 4);
+				boolean isHovered = isInside(mouseX, mouseY, contentX + 8, rowY, rowRight - contentX - 8, ROW_HEIGHT - 4);
 				if (isHovered) {
-					graphics.fill(contentX + 8, rowY, contentX + contentW - 8, rowY + ROW_HEIGHT - 4, withAlpha(palette.hover(), alpha));
+					graphics.fill(contentX + 8, rowY, rowRight, rowY + ROW_HEIGHT - 4, withAlpha(palette.hover(), alpha));
 					if (!node.tooltip().isEmpty()) {
 						hoveredTooltip = node.tooltip();
 					}
 				}
-				graphics.text(this.font, node.label(), contentX + 14, rowY + 6, withAlpha(palette.text(), alpha), false);
+				String label = searching ? "[" + node.category() + "] " + node.label() : node.label();
+				graphics.text(this.font, label, contentX + 14, rowY + 6, withAlpha(palette.text(), alpha), false);
 
 				if (node.kind() == SettingNode.Kind.TOGGLE) {
 					boolean on = node.getBoolean();
-					int pillX = contentX + contentW - 44;
+					int pillX = rowRight - 34;
 					int pillColor = on ? palette.toggleOn() : palette.toggleOff();
 					graphics.fill(pillX, rowY + 3, pillX + 28, rowY + 15, withAlpha(pillColor, alpha));
 				} else if (node.kind() == SettingNode.Kind.SLIDER) {
-					int barX = contentX + contentW - SLIDER_RIGHT_MARGIN;
+					int barX = rowRight - SLIDER_WIDTH - 8;
 					// Track sits on a field chip so it reads as a distinct control surface
 					graphics.fill(barX - 3, rowY + 5, barX + SLIDER_WIDTH + 3, rowY + 14, withAlpha(palette.field(), alpha));
 					graphics.fill(barX, rowY + 8, barX + SLIDER_WIDTH, rowY + 11, withAlpha(palette.accentSoft(), alpha));
@@ -142,16 +215,23 @@ public class ThemedConfigScreen extends Screen {
 				} else if (node.kind() == SettingNode.Kind.ENUM) {
 					String value = node.enumValueLabel();
 					int textWidth = this.font.width(value);
-					graphics.text(this.font, value, contentX + contentW - 12 - textWidth, rowY + 6,
+					graphics.text(this.font, value, rowRight - 4 - textWidth, rowY + 6,
 							withAlpha(palette.mutedText(), alpha), false);
 				}
 
 				// Subtle row separator
 				if (i < rows.size() - 1) {
-					graphics.fill(contentX + 8, rowY + ROW_HEIGHT - 4, contentX + contentW - 8, rowY + ROW_HEIGHT - 3, withAlpha(palette.mutedLine(), alpha));
+					graphics.fill(contentX + 8, rowY + ROW_HEIGHT - 4, rowRight, rowY + ROW_HEIGHT - 3, withAlpha(palette.mutedLine(), alpha));
 				}
 			}
 			graphics.disableScissor();
+
+			int[] thumb = scrollbarThumb(layout, scrollY);
+			if (thumb != null) {
+				int trackX = contentX + contentW - SCROLLBAR_WIDTH - 4;
+				graphics.fill(trackX, contentY, trackX + SCROLLBAR_WIDTH, contentY + contentH, withAlpha(palette.field(), alpha));
+				graphics.fill(trackX, thumb[0], trackX + SCROLLBAR_WIDTH, thumb[0] + thumb[1], withAlpha(palette.accent(), alpha));
+			}
 		}
 		transition.pop(graphics);
 
@@ -182,10 +262,8 @@ public class ThemedConfigScreen extends Screen {
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-		List<String> categories = registry.categories();
-		int rowCount = categories.isEmpty() ? 0 : registry.nodes(categories.get(selectedCategory)).size();
-		int maxScroll = Math.max(0, rowCount * ROW_HEIGHT - (this.height - 40 - HEADER_HEIGHT));
-		scroll.addDelta((int) (-verticalAmount * ROW_HEIGHT), maxScroll);
+		Layout layout = layout();
+		scroll.addDelta((int) (-verticalAmount * ROW_HEIGHT), layout.maxScroll());
 		return true;
 	}
 
@@ -201,50 +279,76 @@ public class ThemedConfigScreen extends Screen {
 			int rowY = sidebarY + 8 + i * ROW_HEIGHT;
 			if (isInside(mouseX, mouseY, panelX, rowY, SIDEBAR_WIDTH, ROW_HEIGHT)) {
 				selectedCategory = i;
+				if (isSearching()) {
+					searchBox.setValue("");
+				}
 				scroll.jumpTo(0);
 				return true;
 			}
 		}
 
-		if (!categories.isEmpty()) {
-			List<SettingNode> rows = registry.nodes(categories.get(selectedCategory));
-			int contentX = panelX + SIDEBAR_WIDTH;
-			int contentY = sidebarY;
-			int contentW = this.width - 40 - SIDEBAR_WIDTH;
-			int scrollY = lastScrollY;
+		Layout layout = layout();
+		int scrollY = scroll.getValue();
 
-			for (int i = 0; i < rows.size(); i++) {
-				int rowY = contentY + 8 + i * ROW_HEIGHT - scrollY;
-				if (!isInside(mouseX, mouseY, contentX + 8, rowY, contentW - 16, ROW_HEIGHT - 4)) continue;
+		int[] thumb = scrollbarThumb(layout, scrollY);
+		if (thumb != null) {
+			int trackX = layout.contentX() + layout.contentW() - SCROLLBAR_WIDTH - 4;
+			if (isInside(mouseX, mouseY, trackX - 2, layout.contentY(), SCROLLBAR_WIDTH + 4, layout.contentH())) {
+				draggingScrollbar = true;
+				dragScrollbarTo(layout, thumb[1], mouseY);
+				return true;
+			}
+		}
 
-				SettingNode node = rows.get(i);
-				if (node.kind() == SettingNode.Kind.TOGGLE) {
-					node.toggle();
-					registry.save();
-					return true;
-				} else if (node.kind() == SettingNode.Kind.SLIDER) {
-					int barX = contentX + contentW - SLIDER_RIGHT_MARGIN;
-					draggingSlider = node;
-					node.setFromRatio((mouseX - barX) / (double) SLIDER_WIDTH);
-					return true;
-				} else if (node.kind() == SettingNode.Kind.ENUM) {
-					node.cycleEnum(1);
-					registry.save();
-					return true;
-				}
+		List<SettingNode> rows = layout.rows();
+		int contentX = layout.contentX();
+		int contentY = layout.contentY();
+		int rowRight = layout.rowRight();
+
+		for (int i = 0; i < rows.size(); i++) {
+			int rowY = contentY + 8 + i * ROW_HEIGHT - scrollY;
+			if (!isInside(mouseX, mouseY, contentX + 8, rowY, rowRight - contentX - 8, ROW_HEIGHT - 4)) continue;
+
+			SettingNode node = rows.get(i);
+			if (node.kind() == SettingNode.Kind.TOGGLE) {
+				node.toggle();
+				registry.save();
+				return true;
+			} else if (node.kind() == SettingNode.Kind.SLIDER) {
+				int barX = rowRight - SLIDER_WIDTH - 8;
+				draggingSlider = node;
+				node.setFromRatio((mouseX - barX) / (double) SLIDER_WIDTH);
+				return true;
+			} else if (node.kind() == SettingNode.Kind.ENUM) {
+				node.cycleEnum(1);
+				registry.save();
+				return true;
 			}
 		}
 
 		return super.mouseClicked(event, doubleClick);
 	}
 
+	private void dragScrollbarTo(Layout layout, int thumbH, int mouseY) {
+		int available = layout.contentH() - thumbH;
+		if (available <= 0 || layout.maxScroll() <= 0) return;
+		double ratio = (mouseY - thumbH / 2.0 - layout.contentY()) / available;
+		ratio = Math.max(0, Math.min(1, ratio));
+		scroll.jumpTo((int) Math.round(ratio * layout.maxScroll()));
+	}
+
 	@Override
 	public boolean mouseDragged(MouseButtonEvent event, double offsetX, double offsetY) {
+		if (draggingScrollbar) {
+			Layout layout = layout();
+			int[] thumb = scrollbarThumb(layout, scroll.getValue());
+			int thumbH = thumb != null ? thumb[1] : SCROLLBAR_MIN_THUMB;
+			dragScrollbarTo(layout, thumbH, (int) event.y());
+			return true;
+		}
 		if (draggingSlider != null) {
-			int panelX = 20;
-			int contentX = panelX + SIDEBAR_WIDTH;
-			int contentW = this.width - 40 - SIDEBAR_WIDTH;
-			int barX = contentX + contentW - SLIDER_RIGHT_MARGIN;
+			Layout layout = layout();
+			int barX = layout.rowRight() - SLIDER_WIDTH - 8;
 			draggingSlider.setFromRatio((event.x() - barX) / (double) SLIDER_WIDTH);
 			return true;
 		}
@@ -253,6 +357,10 @@ public class ThemedConfigScreen extends Screen {
 
 	@Override
 	public boolean mouseReleased(MouseButtonEvent event) {
+		if (draggingScrollbar) {
+			draggingScrollbar = false;
+			return true;
+		}
 		if (draggingSlider != null) {
 			draggingSlider = null;
 			registry.save();

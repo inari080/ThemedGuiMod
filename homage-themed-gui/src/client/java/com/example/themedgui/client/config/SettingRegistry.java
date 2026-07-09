@@ -60,6 +60,15 @@ public class SettingRegistry {
         return byCategory.getOrDefault(category, List.of());
     }
 
+    /** Flattened view across every category, in scan order. Used by the settings-screen search box. */
+    public List<SettingNode> allNodes() {
+        List<SettingNode> all = new ArrayList<>();
+        for (List<SettingNode> nodes : byCategory.values()) {
+            all.addAll(nodes);
+        }
+        return all;
+    }
+
     public void load() {
         if (!Files.exists(filePath)) return;
         try {
