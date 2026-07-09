@@ -24,14 +24,25 @@ public class ThemedConfigScreen extends Screen {
 	private static final int SCROLLBAR_GUTTER = 16; // right-side space reserved for the scrollbar
 	private static final int SCROLLBAR_MIN_THUMB = 20;
 	private static final int SEARCH_BOX_WIDTH = 150;
+	private static final long CATEGORY_SLIDE_MS = 180;
+	private static final int CATEGORY_SLIDE_DISTANCE = 22;
 
 	private final Screen parent;
 	private final SettingRegistry registry;
 	private final ScreenTransition transition = new ScreenTransition();
 	private final SmoothScroll scroll = new SmoothScroll();
 
+	/** Hover glow amount, keyed by "cat:<index>" for sidebar rows or the SettingNode itself for content rows. */
+	private final Anim hoverAnim = new Anim(16f);
+	/** Eased toggle/slider visual position, keyed by SettingNode. */
+	private final Anim controlAnim = new Anim(14f);
+	private final Toast toasts = new Toast();
+
 	private UiTheme theme = UiTheme.DARK;
 	private int selectedCategory = 0;
+	private long categorySwitchTime = System.currentTimeMillis();
+	private int categorySlideDir = 1;
+
 	private Button themeButton;
 	private EditBox searchBox;
 	private SettingNode draggingSlider = null;
@@ -72,6 +83,11 @@ public class ThemedConfigScreen extends Screen {
 
 	private boolean isSearching() {
 		return searchBox != null && !searchBox.getValue().trim().isEmpty();
+	}
+
+	/** Called by ColorPickerScreen (and any future sub-screen) when it commits a change back to us. */
+	public void notifySaved(String what) {
+		toasts.show(what + " saved");
 	}
 
 	/** Rows to display: the selected category normally, or a flattened cross-category match list while searching. */
@@ -126,18 +142,32 @@ public class ThemedConfigScreen extends Screen {
 
 		hoveredTooltip = null;
 
-		graphics.fill(0, 0, this.width, this.height, withAlpha(palette.backdrop(), transition.currentAlpha()));
+		float transitionAlpha = transition.currentAlpha();
+		graphics.fill(0, 0, this.width, this.height, withAlpha(palette.backdrop(), transitionAlpha));
+		// Drifting ambient light, unaffected by the panel's own slide so it feels like it's behind everything.
+		AmbientBackdrop.drawBlobs(graphics, this.width, this.height, palette.accent(), transitionAlpha);
+
+		int panelX = 20;
+		int panelY = 20;
+		int panelW = this.width - 40;
+		int panelH = this.height - 40;
+
+		// Category-switch slide: content eases in from the direction we navigated, sidebar stays put.
+		float catProgress = 1f;
+		if (!searching) {
+			float raw = clamp01((System.currentTimeMillis() - categorySwitchTime) / (float) CATEGORY_SLIDE_MS);
+			catProgress = easeOutCubic(raw);
+		}
+		int slideOffsetX = searching ? 0 : Math.round((1f - catProgress) * categorySlideDir * CATEGORY_SLIDE_DISTANCE);
+		float catAlpha = searching ? 1f : catProgress;
 
 		transition.push(graphics);
 		{
-			int panelX = 20;
-			int panelY = 20;
-			int panelW = this.width - 40;
-			int panelH = this.height - 40;
-			float alpha = transition.currentAlpha();
+			float alpha = transitionAlpha;
 
 			graphics.fill(panelX, panelY, panelX + panelW, panelY + panelH, withAlpha(palette.panel(), alpha));
 			graphics.outline(panelX, panelY, panelW, panelH, withAlpha(palette.panelBorder(), alpha));
+			AmbientBackdrop.drawPanelGlow(graphics, panelX, panelY, panelW, panelH, palette.accent(), alpha);
 
 			// Header bar
 			graphics.fill(panelX, panelY, panelX + panelW, panelY + HEADER_HEIGHT, withAlpha(palette.header(), alpha));
@@ -155,9 +185,19 @@ public class ThemedConfigScreen extends Screen {
 				int rowY = sidebarY + 8 + i * ROW_HEIGHT;
 				boolean isSelected = !searching && i == selectedCategory;
 				boolean isHovered = !isSelected && isInside(mouseX, mouseY, sidebarX, rowY, SIDEBAR_WIDTH, ROW_HEIGHT);
-				int rowColor = isSelected ? palette.selected() : (isHovered ? palette.hover() : 0);
-				if (rowColor != 0) {
-					graphics.fill(sidebarX + 4, rowY, sidebarX + SIDEBAR_WIDTH - 4, rowY + ROW_HEIGHT - 2, withAlpha(rowColor, alpha));
+
+				String hoverKey = "cat:" + i;
+				hoverAnim.setTarget(hoverKey, isHovered ? 1f : 0f);
+				float hoverT = hoverAnim.tick(hoverKey);
+
+				if (isSelected || hoverT > 0.01f) {
+					int pad = Math.round(hoverT * 2);
+					float rowAlpha = isSelected ? alpha : alpha * hoverT;
+					int rowColor = isSelected ? palette.selected() : palette.hover();
+					graphics.fill(sidebarX + 4 - pad, rowY - pad, sidebarX + SIDEBAR_WIDTH - 4 + pad, rowY + ROW_HEIGHT - 2 + pad, withAlpha(rowColor, rowAlpha));
+					if (!isSelected && hoverT > 0.05f) {
+						graphics.outline(sidebarX + 4 - pad, rowY - pad, SIDEBAR_WIDTH - 8 + pad * 2, ROW_HEIGHT - 2 + pad * 2, withAlpha(palette.accent(), alpha * hoverT * 0.6f));
+					}
 				}
 				int textColor = isSelected ? palette.text() : palette.mutedText();
 				graphics.text(this.font, categories.get(i), sidebarX + 12, rowY + 6, withAlpha(textColor, alpha), false);
@@ -182,58 +222,88 @@ public class ThemedConfigScreen extends Screen {
 			int scrollY = scroll.tick(layout.maxScroll());
 			for (int i = 0; i < rows.size(); i++) {
 				SettingNode node = rows.get(i);
-				int rowY = contentY + 8 + i * ROW_HEIGHT - scrollY;
-				if (rowY + ROW_HEIGHT < contentY || rowY > contentY + contentH) {
+				int baseRowY = contentY + 8 + i * ROW_HEIGHT - scrollY;
+				if (baseRowY + ROW_HEIGHT < contentY || baseRowY > contentY + contentH) {
 					continue;
 				}
+				int rowY = baseRowY;
+				int rowX = slideOffsetX;
+				float rowAlphaMul = alpha * catAlpha;
+
+				// Hit-testing uses the un-slid position so clicks feel right even mid-animation.
 				boolean isHovered = isInside(mouseX, mouseY, contentX + 8, rowY, rowRight - contentX - 8, ROW_HEIGHT - 4);
-				if (isHovered) {
-					graphics.fill(contentX + 8, rowY, rowRight, rowY + ROW_HEIGHT - 4, withAlpha(palette.hover(), alpha));
-					if (!node.tooltip().isEmpty()) {
-						hoveredTooltip = node.tooltip();
+				hoverAnim.setTarget(node, isHovered ? 1f : 0f);
+				float hoverT = hoverAnim.tick(node);
+
+				if (hoverT > 0.01f) {
+					int pad = Math.round(hoverT * 2);
+					graphics.fill(contentX + 8 - pad + rowX, rowY - pad, rowRight + pad + rowX, rowY + ROW_HEIGHT - 4 + pad, withAlpha(palette.hover(), rowAlphaMul * hoverT));
+					if (hoverT > 0.1f) {
+						graphics.outline(contentX + 8 - pad + rowX, rowY - pad, rowRight - contentX - 8 + pad * 2, ROW_HEIGHT - 4 + pad * 2, withAlpha(palette.accent(), rowAlphaMul * hoverT * 0.5f));
 					}
 				}
+				if (isHovered && !node.tooltip().isEmpty()) {
+					hoveredTooltip = node.tooltip();
+				}
+
 				String label = searching ? "[" + node.category() + "] " + node.label() : node.label();
-				graphics.text(this.font, label, contentX + 14, rowY + 6, withAlpha(palette.text(), alpha), false);
+				graphics.text(this.font, label, contentX + 14 + rowX, rowY + 6, withAlpha(palette.text(), rowAlphaMul), false);
 
 				if (node.kind() == SettingNode.Kind.TOGGLE) {
 					boolean on = node.getBoolean();
-					int pillX = rowRight - 34;
-					int pillColor = on ? palette.toggleOn() : palette.toggleOff();
-					graphics.fill(pillX, rowY + 3, pillX + 28, rowY + 15, withAlpha(pillColor, alpha));
+					controlAnim.setTarget(node, on ? 1f : 0f);
+					float animT = controlAnim.tick(node);
+
+					int trackX = rowRight - 34 + rowX;
+					int trackY = rowY + 3;
+					int trackW = 28;
+					int trackH = 12;
+					int trackColor = lerpArgb(palette.toggleOff(), palette.toggleOn(), animT);
+					graphics.fill(trackX, trackY, trackX + trackW, trackY + trackH, withAlpha(trackColor, rowAlphaMul));
+
+					int knobSize = trackH - 4;
+					int knobTravel = trackW - knobSize - 4;
+					int knobX = trackX + 2 + Math.round(animT * knobTravel);
+					graphics.fill(knobX, trackY + 2, knobX + knobSize, trackY + trackH - 2, withAlpha(0xFFFFFFFF, rowAlphaMul));
 				} else if (node.kind() == SettingNode.Kind.SLIDER) {
-					int barX = rowRight - SLIDER_WIDTH - 8;
+					boolean isDraggingThis = node == draggingSlider;
+					controlAnim.setTarget(node, (float) node.getRatio());
+					float ticked = controlAnim.tick(node);
+					float animRatio = isDraggingThis ? (float) node.getRatio() : ticked;
+
+					int barX = rowRight - SLIDER_WIDTH - 8 + rowX;
 					// Track sits on a field chip so it reads as a distinct control surface
-					graphics.fill(barX - 3, rowY + 5, barX + SLIDER_WIDTH + 3, rowY + 14, withAlpha(palette.field(), alpha));
-					graphics.fill(barX, rowY + 8, barX + SLIDER_WIDTH, rowY + 11, withAlpha(palette.accentSoft(), alpha));
-					int fillW = (int) (SLIDER_WIDTH * node.getRatio());
-					graphics.fill(barX, rowY + 8, barX + fillW, rowY + 11, withAlpha(palette.toggleOn(), alpha));
+					graphics.fill(barX - 3, rowY + 5, barX + SLIDER_WIDTH + 3, rowY + 14, withAlpha(palette.field(), rowAlphaMul));
+					int fillW = Math.round(SLIDER_WIDTH * animRatio);
+					graphics.fill(barX, rowY + 8, barX + fillW, rowY + 11, withAlpha(palette.toggleOn(), rowAlphaMul));
+					int knobX = barX + fillW;
+					graphics.fill(knobX - 1, rowY + 4, knobX + 2, rowY + 15, withAlpha(0xFFFFFFFF, rowAlphaMul));
 					// value shown just left of the track, on field text color
 					String valueLabel = formatSliderValue(node);
 					int valueWidth = this.font.width(valueLabel);
-					graphics.text(this.font, valueLabel, barX - 8 - valueWidth, rowY + 6, withAlpha(palette.fieldText(), alpha), false);
+					graphics.text(this.font, valueLabel, barX - 8 - valueWidth, rowY + 6, withAlpha(palette.fieldText(), rowAlphaMul), false);
 				} else if (node.kind() == SettingNode.Kind.ENUM) {
 					String value = node.enumValueLabel();
 					int textWidth = this.font.width(value);
-					graphics.text(this.font, value, rowRight - 4 - textWidth, rowY + 6,
-							withAlpha(palette.mutedText(), alpha), false);
+					graphics.text(this.font, value, rowRight - 4 - textWidth + rowX, rowY + 6,
+							withAlpha(palette.mutedText(), rowAlphaMul), false);
 				} else if (node.kind() == SettingNode.Kind.ACTION) {
 					String actionLabel = "Open";
 					int chipW = this.font.width(actionLabel) + 12;
-					int chipX = rowRight - chipW;
-					graphics.fill(chipX, rowY + 2, rowRight, rowY + ROW_HEIGHT - 6, withAlpha(palette.accentSoft(), alpha));
-					graphics.outline(chipX, rowY + 2, chipW, ROW_HEIGHT - 8, withAlpha(palette.accent(), alpha));
-					graphics.text(this.font, actionLabel, chipX + 6, rowY + 6, withAlpha(palette.text(), alpha), false);
+					int chipX = rowRight - chipW + rowX;
+					graphics.fill(chipX, rowY + 2, rowRight + rowX, rowY + ROW_HEIGHT - 6, withAlpha(palette.accentSoft(), rowAlphaMul));
+					graphics.outline(chipX, rowY + 2, chipW, ROW_HEIGHT - 8, withAlpha(palette.accent(), rowAlphaMul));
+					graphics.text(this.font, actionLabel, chipX + 6, rowY + 6, withAlpha(palette.text(), rowAlphaMul), false);
 				} else if (node.kind() == SettingNode.Kind.COLOR) {
 					int swatchW = 28;
-					int swatchX = rowRight - swatchW;
-					graphics.fill(swatchX, rowY + 3, rowRight, rowY + 15, withAlpha(0xFF000000 | node.getColor(), alpha));
-					graphics.outline(swatchX, rowY + 3, swatchW, 12, withAlpha(palette.line(), alpha));
+					int swatchX = rowRight - swatchW + rowX;
+					graphics.fill(swatchX, rowY + 3, rowRight + rowX, rowY + 15, withAlpha(0xFF000000 | node.getColor(), rowAlphaMul));
+					graphics.outline(swatchX, rowY + 3, swatchW, 12, withAlpha(palette.line(), rowAlphaMul));
 				}
 
 				// Subtle row separator
 				if (i < rows.size() - 1) {
-					graphics.fill(contentX + 8, rowY + ROW_HEIGHT - 4, rowRight, rowY + ROW_HEIGHT - 3, withAlpha(palette.mutedLine(), alpha));
+					graphics.fill(contentX + 8 + rowX, rowY + ROW_HEIGHT - 4, rowRight + rowX, rowY + ROW_HEIGHT - 3, withAlpha(palette.mutedLine(), rowAlphaMul));
 				}
 			}
 			graphics.disableScissor();
@@ -252,6 +322,8 @@ public class ThemedConfigScreen extends Screen {
 		if (hoveredTooltip != null) {
 			drawTooltip(graphics, palette, hoveredTooltip, mouseX, mouseY);
 		}
+		// Toasts are pinned to the panel corner but drawn outside the push/pop block, so they don't slide with it.
+		toasts.draw(graphics, this.font, palette, panelX + panelW - 8, panelY + panelH - 8);
 
 		if (transition.finishCloseIfReady() && this.minecraft != null) {
 			this.minecraft.setScreen(parent);
@@ -290,6 +362,10 @@ public class ThemedConfigScreen extends Screen {
 		for (int i = 0; i < categories.size(); i++) {
 			int rowY = sidebarY + 8 + i * ROW_HEIGHT;
 			if (isInside(mouseX, mouseY, panelX, rowY, SIDEBAR_WIDTH, ROW_HEIGHT)) {
+				if (i != selectedCategory) {
+					categorySlideDir = i > selectedCategory ? 1 : -1;
+					categorySwitchTime = System.currentTimeMillis();
+				}
 				selectedCategory = i;
 				if (isSearching()) {
 					searchBox.setValue("");
@@ -325,6 +401,7 @@ public class ThemedConfigScreen extends Screen {
 			if (node.kind() == SettingNode.Kind.TOGGLE) {
 				node.toggle();
 				registry.save();
+				toasts.show(node.label() + " saved");
 				return true;
 			} else if (node.kind() == SettingNode.Kind.SLIDER) {
 				int barX = rowRight - SLIDER_WIDTH - 8;
@@ -334,6 +411,7 @@ public class ThemedConfigScreen extends Screen {
 			} else if (node.kind() == SettingNode.Kind.ENUM) {
 				node.cycleEnum(1);
 				registry.save();
+				toasts.show(node.label() + " saved");
 				return true;
 			} else if (node.kind() == SettingNode.Kind.ACTION) {
 				node.runAction();
@@ -385,6 +463,7 @@ public class ThemedConfigScreen extends Screen {
 			return true;
 		}
 		if (draggingSlider != null) {
+			toasts.show(draggingSlider.label() + " saved");
 			draggingSlider = null;
 			registry.save();
 			return true;
@@ -422,6 +501,29 @@ public class ThemedConfigScreen extends Screen {
 		int a = (argb >>> 24) & 0xFF;
 		int scaled = Math.round(a * clamp(factor, 0f, 1f));
 		return (scaled << 24) | (argb & 0x00FFFFFF);
+	}
+
+	/** Per-channel linear blend between two ARGB colors (alpha channel taken from `to`). */
+	private static int lerpArgb(int from, int to, float t) {
+		float clamped = clamp(t, 0f, 1f);
+		int a = (to >>> 24) & 0xFF;
+		int r = Math.round(lerp((from >> 16) & 0xFF, (to >> 16) & 0xFF, clamped));
+		int g = Math.round(lerp((from >> 8) & 0xFF, (to >> 8) & 0xFF, clamped));
+		int b = Math.round(lerp(from & 0xFF, to & 0xFF, clamped));
+		return (a << 24) | (r << 16) | (g << 8) | b;
+	}
+
+	private static float lerp(float from, float to, float t) {
+		return from + (to - from) * t;
+	}
+
+	private static float clamp01(float v) {
+		return Math.max(0f, Math.min(1f, v));
+	}
+
+	private static float easeOutCubic(float t) {
+		float inv = 1f - t;
+		return 1f - inv * inv * inv;
 	}
 
 	private static float clamp(float v, float min, float max) {

@@ -91,6 +91,9 @@ public class ColorPickerScreen extends Screen {
         }).bounds(panelX + GAP, panelY + panelH - GAP - 20, buttonWidth, 20).build());
 
         this.addRenderableWidget(Button.builder(Component.literal("Done"), btn -> {
+            if (parent instanceof ThemedConfigScreen configScreen) {
+                configScreen.notifySaved("Color");
+            }
             if (this.minecraft != null) this.minecraft.setScreen(parent);
         }).bounds(panelX + GAP * 2 + buttonWidth, panelY + panelH - GAP - 20, buttonWidth, 20).build());
     }
