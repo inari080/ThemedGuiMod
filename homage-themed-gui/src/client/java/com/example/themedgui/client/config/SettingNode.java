@@ -4,7 +4,7 @@ import java.lang.reflect.Field;
 
 public class SettingNode {
 
-    public enum Kind { TOGGLE, SLIDER, TEXT, ACTION, ENUM }
+    public enum Kind { TOGGLE, SLIDER, TEXT, ACTION, ENUM, COLOR }
 
     private final Object holder;
     private final Field field;
@@ -111,5 +111,14 @@ public class SettingNode {
             Object value = field.get(holder);
             if (value instanceof Runnable runnable) runnable.run();
         } catch (IllegalAccessException ignored) {}
+    }
+
+    // --- COLOR (backed by an int field holding a packed 0xRRGGBB value) ---
+    public int getColor() {
+        try { return field.getInt(holder); } catch (IllegalAccessException e) { return 0; }
+    }
+
+    public void setColor(int rgb) {
+        try { field.setInt(holder, rgb); } catch (IllegalAccessException ignored) {}
     }
 }

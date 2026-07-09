@@ -38,6 +38,8 @@ public class SettingRegistry {
             Class<?> type = field.getType();
             if (type == boolean.class) {
                 kind = SettingNode.Kind.TOGGLE;
+            } else if (type == int.class && ann.color()) {
+                kind = SettingNode.Kind.COLOR;
             } else if (type == int.class || type == float.class) {
                 kind = SettingNode.Kind.SLIDER;
             } else if (type.isEnum()) {
@@ -89,6 +91,8 @@ public class SettingRegistry {
                         node.setFromRatio(ratio);
                     } else if (node.kind() == SettingNode.Kind.ENUM && saved instanceof String s) {
                         node.setEnumByName(s);
+                    } else if (node.kind() == SettingNode.Kind.COLOR && saved instanceof Number n) {
+                        node.setColor(n.intValue());
                     }
                 }
             }
@@ -104,6 +108,7 @@ public class SettingRegistry {
                     case TOGGLE -> node.getBoolean();
                     case SLIDER -> node.getNumber();
                     case ENUM -> node.getEnum() != null ? node.getEnum().name() : null;
+                    case COLOR -> node.getColor();
                     default -> null;
                 };
                 if (value != null) out.put(node.label(), value);

@@ -17,4 +17,5 @@ public @interface Setting {
     String tooltip() default ""; // shown on hover, optional
     double min() default 0;      // used for SLIDER kind (float/int fields)
     double max() default 1;
+    boolean color() default false; // if true on an int field, shown as a color-picker row instead of a slider
 }

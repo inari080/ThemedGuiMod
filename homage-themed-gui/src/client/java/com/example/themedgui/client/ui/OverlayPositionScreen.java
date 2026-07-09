@@ -80,7 +80,7 @@ public class OverlayPositionScreen extends Screen {
 
         ThemedGuiConfig config = ThemedGuiModClient.CONFIG;
         int alpha = Math.max(0, Math.min(255, config.opacity));
-        int color = (alpha << 24) | 0x33AAFF;
+        int color = (alpha << 24) | (config.overlayColor & 0x00FFFFFF);
         graphics.fill(boxX, boxY, boxX + boxW, boxY + boxH, color);
 
         boolean hovered = isInside(mouseX, mouseY, boxX, boxY, boxW, boxH);

@@ -224,6 +224,11 @@ public class ThemedConfigScreen extends Screen {
 					graphics.fill(chipX, rowY + 2, rowRight, rowY + ROW_HEIGHT - 6, withAlpha(palette.accentSoft(), alpha));
 					graphics.outline(chipX, rowY + 2, chipW, ROW_HEIGHT - 8, withAlpha(palette.accent(), alpha));
 					graphics.text(this.font, actionLabel, chipX + 6, rowY + 6, withAlpha(palette.text(), alpha), false);
+				} else if (node.kind() == SettingNode.Kind.COLOR) {
+					int swatchW = 28;
+					int swatchX = rowRight - swatchW;
+					graphics.fill(swatchX, rowY + 3, rowRight, rowY + 15, withAlpha(0xFF000000 | node.getColor(), alpha));
+					graphics.outline(swatchX, rowY + 3, swatchW, 12, withAlpha(palette.line(), alpha));
 				}
 
 				// Subtle row separator
@@ -332,6 +337,14 @@ public class ThemedConfigScreen extends Screen {
 				return true;
 			} else if (node.kind() == SettingNode.Kind.ACTION) {
 				node.runAction();
+				return true;
+			} else if (node.kind() == SettingNode.Kind.COLOR) {
+				if (this.minecraft != null) {
+					this.minecraft.setScreen(new ColorPickerScreen(this, theme, node.getColor(), picked -> {
+						node.setColor(picked);
+						registry.save();
+					}));
+				}
 				return true;
 			}
 		}

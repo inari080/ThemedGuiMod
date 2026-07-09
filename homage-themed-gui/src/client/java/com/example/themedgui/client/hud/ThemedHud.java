@@ -14,7 +14,7 @@ public class ThemedHud {
 
         float scale = config.hudScale;
         int alpha = Math.max(0, Math.min(255, config.opacity));
-        int color = (alpha << 24) | 0x33AAFF;
+        int color = (alpha << 24) | (config.overlayColor & 0x00FFFFFF);
 
         int w = (int) (100 * scale);
         int h = (int) (20 * scale);

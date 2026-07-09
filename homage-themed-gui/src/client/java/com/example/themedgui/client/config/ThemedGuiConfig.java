@@ -17,6 +17,9 @@ public class ThemedGuiConfig {
     @Setting(category = "Appearance", label = "Opacity", tooltip = "Overlay transparency, 0 = invisible, 255 = solid", min = 0, max = 255)
     public int opacity = 200;
 
+    @Setting(category = "Appearance", label = "Overlay color", tooltip = "Pick a custom color for the HUD overlay box", color = true)
+    public int overlayColor = 0x33AAFF;
+
     @Setting(category = "Appearance", label = "Overlay position")
     public OverlayPosition overlayPosition = OverlayPosition.TOP_LEFT;
 
