@@ -25,4 +25,8 @@ public class ThemedGuiConfig {
 
     @Setting(category = "Appearance", label = "Edit HUD position", tooltip = "Drag the overlay directly to where you want it")
     public Runnable editHudPosition = () -> {};
+
+    @Setting(category = "Appearance", label = "UI Settings", tooltip = "Open the theme picker with live palette previews")
+    public Runnable openUiSettings = () -> {};
 }
+

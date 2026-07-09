@@ -38,7 +38,7 @@ public class ThemedConfigScreen extends Screen {
 	private final Anim controlAnim = new Anim(14f);
 	private final Toast toasts = new Toast();
 
-	private UiTheme theme = UiTheme.DARK;
+	private UiTheme theme = UiSettings.INSTANCE.getTheme();
 	private int selectedCategory = 0;
 	private long categorySwitchTime = System.currentTimeMillis();
 	private int categorySlideDir = 1;
@@ -66,7 +66,9 @@ public class ThemedConfigScreen extends Screen {
 	protected void init() {
 		themeButton = Button.builder(themeButtonLabel(), btn -> {
 			theme = theme.next();
+			UiSettings.INSTANCE.setTheme(theme);
 			btn.setMessage(themeButtonLabel());
+			toasts.show("Theme saved");
 		}).bounds(this.width - 116, 8, 108, 20).build();
 		this.addRenderableWidget(themeButton);
 
@@ -88,6 +90,14 @@ public class ThemedConfigScreen extends Screen {
 	/** Called by ColorPickerScreen (and any future sub-screen) when it commits a change back to us. */
 	public void notifySaved(String what) {
 		toasts.show(what + " saved");
+	}
+
+	/** Called by UiSettingsScreen when the user picks a theme card. */
+	public void setTheme(UiTheme theme) {
+		this.theme = theme;
+		if (themeButton != null) {
+			themeButton.setMessage(themeButtonLabel());
+		}
 	}
 
 	/** Rows to display: the selected category normally, or a flattened cross-category match list while searching. */

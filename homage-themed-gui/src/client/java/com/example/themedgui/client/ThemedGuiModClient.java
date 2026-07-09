@@ -6,6 +6,8 @@ import com.example.themedgui.client.hud.OverlayPositionStore;
 import com.example.themedgui.client.hud.ThemedHud;
 import com.example.themedgui.client.ui.OverlayPositionScreen;
 import com.example.themedgui.client.ui.ThemedConfigScreen;
+import com.example.themedgui.client.ui.UiSettings;
+import com.example.themedgui.client.ui.UiSettingsScreen;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -14,6 +16,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 
@@ -34,10 +37,16 @@ public class ThemedGuiModClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		REGISTRY = new SettingRegistry(MOD_ID, CONFIG);
+		UiSettings.INSTANCE.ensureLoaded();
 		OverlayPositionStore.init(MOD_ID);
 		CONFIG.editHudPosition = () -> {
 			Minecraft client = Minecraft.getInstance();
 			client.setScreen(new OverlayPositionScreen());
+		};
+		CONFIG.openUiSettings = () -> {
+			Minecraft client = Minecraft.getInstance();
+			Screen parent = client.screen instanceof ThemedConfigScreen configScreen ? configScreen : null;
+			client.setScreen(new UiSettingsScreen(parent));
 		};
 
 		openConfigKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
