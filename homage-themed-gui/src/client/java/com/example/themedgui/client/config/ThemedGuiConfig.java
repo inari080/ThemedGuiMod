@@ -3,6 +3,8 @@ package com.example.themedgui.client.config;
 /** Plain field holder — your feature code reads these fields directly. */
 public class ThemedGuiConfig {
 
+    public enum OverlayPosition { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
+
     @Setting(category = "General", label = "Enable overlay")
     public boolean enableOverlay = true;
 
@@ -14,4 +16,7 @@ public class ThemedGuiConfig {
 
     @Setting(category = "Appearance", label = "Opacity", min = 0, max = 255)
     public int opacity = 200;
+
+    @Setting(category = "Appearance", label = "Overlay position")
+    public OverlayPosition overlayPosition = OverlayPosition.TOP_LEFT;
 }

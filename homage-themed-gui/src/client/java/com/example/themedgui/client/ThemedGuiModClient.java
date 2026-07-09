@@ -2,10 +2,13 @@ package com.example.themedgui.client;
 
 import com.example.themedgui.client.config.SettingRegistry;
 import com.example.themedgui.client.config.ThemedGuiConfig;
+import com.example.themedgui.client.hud.ThemedHud;
 import com.example.themedgui.client.ui.ThemedConfigScreen;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
@@ -43,5 +46,11 @@ public class ThemedGuiModClient implements ClientModInitializer {
 				}
 			}
 		});
+
+		HudElementRegistry.attachElementBefore(
+				VanillaHudElements.CHAT,
+				Identifier.fromNamespaceAndPath(MOD_ID, "overlay"),
+				ThemedHud::extract
+		);
 	}
 }

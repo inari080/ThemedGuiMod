@@ -40,6 +40,8 @@ public class SettingRegistry {
                 kind = SettingNode.Kind.TOGGLE;
             } else if (type == int.class || type == float.class) {
                 kind = SettingNode.Kind.SLIDER;
+            } else if (type.isEnum()) {
+                kind = SettingNode.Kind.ENUM;
             } else {
                 continue; // TEXT / ACTION can be added later the same way
             }
@@ -74,6 +76,8 @@ public class SettingRegistry {
                         double ratio = node.max() > node.min()
                                 ? (n.doubleValue() - node.min()) / (node.max() - node.min()) : 0;
                         node.setFromRatio(ratio);
+                    } else if (node.kind() == SettingNode.Kind.ENUM && saved instanceof String s) {
+                        node.setEnumByName(s);
                     }
                 }
             }
@@ -85,8 +89,13 @@ public class SettingRegistry {
         Map<String, Object> out = new LinkedHashMap<>();
         for (List<SettingNode> nodes : byCategory.values()) {
             for (SettingNode node : nodes) {
-                out.put(node.label(), node.kind() == SettingNode.Kind.TOGGLE
-                        ? node.getBoolean() : node.getNumber());
+                Object value = switch (node.kind()) {
+                    case TOGGLE -> node.getBoolean();
+                    case SLIDER -> node.getNumber();
+                    case ENUM -> node.getEnum() != null ? node.getEnum().name() : null;
+                    default -> null;
+                };
+                if (value != null) out.put(node.label(), value);
             }
         }
         try {

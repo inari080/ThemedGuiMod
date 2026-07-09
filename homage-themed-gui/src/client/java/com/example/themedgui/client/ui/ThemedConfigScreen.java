@@ -15,6 +15,8 @@ public class ThemedConfigScreen extends Screen {
 	private static final int SIDEBAR_WIDTH = 90;
 	private static final int ROW_HEIGHT = 22;
 	private static final int HEADER_HEIGHT = 28;
+	private static final int SLIDER_WIDTH = 70;
+	private static final int SLIDER_RIGHT_MARGIN = 84;
 
 	private final Screen parent;
 	private final SettingRegistry registry;
@@ -25,6 +27,7 @@ public class ThemedConfigScreen extends Screen {
 	private int selectedCategory = 0;
 	private Button themeButton;
 	private int lastScrollY = 0;
+	private SettingNode draggingSlider = null;
 
 	public ThemedConfigScreen(Screen parent, SettingRegistry registry) {
 		super(Component.literal("Themed GUI Demo"));
@@ -112,11 +115,15 @@ public class ThemedConfigScreen extends Screen {
 					int pillColor = on ? palette.toggleOn() : palette.toggleOff();
 					graphics.fill(pillX, rowY + 3, pillX + 28, rowY + 15, withAlpha(pillColor, alpha));
 				} else if (node.kind() == SettingNode.Kind.SLIDER) {
-					int barX = contentX + contentW - 84;
-					int barW = 70;
-					graphics.fill(barX, rowY + 8, barX + barW, rowY + 11, withAlpha(palette.toggleOff(), alpha));
-					int fillW = (int) (barW * node.getRatio());
+					int barX = contentX + contentW - SLIDER_RIGHT_MARGIN;
+					graphics.fill(barX, rowY + 8, barX + SLIDER_WIDTH, rowY + 11, withAlpha(palette.toggleOff(), alpha));
+					int fillW = (int) (SLIDER_WIDTH * node.getRatio());
 					graphics.fill(barX, rowY + 8, barX + fillW, rowY + 11, withAlpha(palette.toggleOn(), alpha));
+				} else if (node.kind() == SettingNode.Kind.ENUM) {
+					String value = node.enumValueLabel();
+					int textWidth = this.font.width(value);
+					graphics.text(this.font, value, contentX + contentW - 12 - textWidth, rowY + 6,
+							withAlpha(palette.mutedText(), alpha), false);
 				}
 			}
 			graphics.disableScissor();
@@ -171,13 +178,43 @@ public class ThemedConfigScreen extends Screen {
 					node.toggle();
 					registry.save();
 					return true;
+				} else if (node.kind() == SettingNode.Kind.SLIDER) {
+					int barX = contentX + contentW - SLIDER_RIGHT_MARGIN;
+					draggingSlider = node;
+					node.setFromRatio((mouseX - barX) / (double) SLIDER_WIDTH);
+					return true;
+				} else if (node.kind() == SettingNode.Kind.ENUM) {
+					node.cycleEnum(1);
+					registry.save();
+					return true;
 				}
-				// SLIDER drag handling can be added in mouseDragged the same way,
-				// using node.setFromRatio((mouseX - barX) / (double) barW).
 			}
 		}
 
 		return super.mouseClicked(event, doubleClick);
+	}
+
+	@Override
+	public boolean mouseDragged(MouseButtonEvent event, double offsetX, double offsetY) {
+		if (draggingSlider != null) {
+			int panelX = 20;
+			int contentX = panelX + SIDEBAR_WIDTH;
+			int contentW = this.width - 40 - SIDEBAR_WIDTH;
+			int barX = contentX + contentW - SLIDER_RIGHT_MARGIN;
+			draggingSlider.setFromRatio((event.x() - barX) / (double) SLIDER_WIDTH);
+			return true;
+		}
+		return super.mouseDragged(event, offsetX, offsetY);
+	}
+
+	@Override
+	public boolean mouseReleased(MouseButtonEvent event) {
+		if (draggingSlider != null) {
+			draggingSlider = null;
+			registry.save();
+			return true;
+		}
+		return super.mouseReleased(event);
 	}
 
 	@Override

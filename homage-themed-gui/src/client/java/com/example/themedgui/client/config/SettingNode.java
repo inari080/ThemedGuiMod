@@ -4,7 +4,7 @@ import java.lang.reflect.Field;
 
 public class SettingNode {
 
-    public enum Kind { TOGGLE, SLIDER, TEXT, ACTION }
+    public enum Kind { TOGGLE, SLIDER, TEXT, ACTION, ENUM }
 
     private final Object holder;
     private final Field field;
@@ -70,4 +70,38 @@ public class SettingNode {
 
     public double min() { return min; }
     public double max() { return max; }
+
+    // --- ENUM ---
+    public Enum<?> getEnum() {
+        try { return (Enum<?>) field.get(holder); } catch (IllegalAccessException e) { return null; }
+    }
+
+    /** Cycles to the next (or previous, with step = -1) constant of the field's enum type. */
+    public void cycleEnum(int step) {
+        try {
+            Enum<?>[] constants = (Enum<?>[]) field.getType().getEnumConstants();
+            Enum<?> current = (Enum<?>) field.get(holder);
+            int next = Math.floorMod(current.ordinal() + step, constants.length);
+            field.set(holder, constants[next]);
+        } catch (IllegalAccessException ignored) {}
+    }
+
+    /** Used by SettingRegistry#load to restore a saved enum constant by name. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public void setEnumByName(String name) {
+        try {
+            Enum<?> value = Enum.valueOf((Class<? extends Enum>) field.getType(), name);
+            field.set(holder, value);
+        } catch (IllegalArgumentException | IllegalAccessException ignored) {
+            // unknown/renamed constant in saved file — keep current value
+        }
+    }
+
+    /** Human-readable label for the current enum value, e.g. HUD_SCALE -> "Hud scale". */
+    public String enumValueLabel() {
+        Enum<?> value = getEnum();
+        if (value == null) return "";
+        String raw = value.name().toLowerCase().replace('_', ' ');
+        return Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
+    }
 }
