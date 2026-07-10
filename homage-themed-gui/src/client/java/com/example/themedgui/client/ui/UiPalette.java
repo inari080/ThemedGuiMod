@@ -55,7 +55,7 @@ public record UiPalette(
 					0xFF7C9CFF, // accent
 					0xFF3D4E80, // accent soft (tracks, glows)
 					0xFF5CE08A, // toggle on
-					0xFF4A4A55, // toggle off
+					0xFFD9525C, // toggle off (red, for clear on/off contrast)
 					0xF20B0B10, // tooltip back
 					0xFFEAEAF0  // tooltip text
 			);
@@ -77,7 +77,7 @@ public record UiPalette(
 					0xFF3F65E0,
 					0xFFB9C6F5,
 					0xFF2FAE64,
-					0xFFC7C7D1,
+					0xFFE2626B,
 					0xF2202028,
 					0xFFF5F5F8
 			);
@@ -99,7 +99,7 @@ public record UiPalette(
 					0xFF4CD98A,
 					0xFF275C3F,
 					0xFF4CD98A,
-					0xFF32493C,
+					0xFFC15C52,
 					0xF20A140F,
 					0xFFE7F5EC
 			);

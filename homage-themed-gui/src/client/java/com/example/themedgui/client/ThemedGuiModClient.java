@@ -1,9 +1,5 @@
 package com.example.themedgui.client;
 
-import com.example.themedgui.client.automining.AutoMiner;
-import com.example.themedgui.client.automining.MiningRoute;
-import com.example.themedgui.client.automining.RouteManager;
-import com.example.themedgui.client.automining.RouteMiner;
 import com.example.themedgui.client.config.SettingRegistry;
 import com.example.themedgui.client.config.ThemedGuiConfig;
 import com.example.themedgui.client.hud.OverlayPositionStore;
@@ -31,25 +27,20 @@ public class ThemedGuiModClient implements ClientModInitializer {
 	// 他のfeatureコードからはこのstaticフィールドを直接参照してON/OFFを見る
 	public static final ThemedGuiConfig CONFIG = new ThemedGuiConfig();
 	public static SettingRegistry REGISTRY;
-	public static AutoMiner autoMiner;
-	public static RouteMiner routeMiner;
-	public static RouteManager routeManager;
+
 
 	private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
 			Identifier.fromNamespaceAndPath(MOD_ID, "general")
 	);
 
 	private static KeyMapping openConfigKey;
-	private static KeyMapping toggleAutoMiningKey;
+	private static KeyMapping toggleKey;
 
 	@Override
 	public void onInitializeClient() {
 		REGISTRY = new SettingRegistry(MOD_ID, CONFIG);
 		UiSettings.INSTANCE.ensureLoaded();
 		OverlayPositionStore.init(MOD_ID);
-		autoMiner = new AutoMiner();
-		routeMiner = new RouteMiner();
-		routeManager = new RouteManager();
 
 		CONFIG.editHudPosition = () -> {
 			Minecraft client = Minecraft.getInstance();
@@ -68,7 +59,7 @@ public class ThemedGuiModClient implements ClientModInitializer {
 				CATEGORY
 		));
 
-		toggleAutoMiningKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+		toggleKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 				"key.themedgui.toggle_auto_mining",
 				InputConstants.Type.KEYSYM,
 				GLFW.GLFW_KEY_M,
@@ -81,41 +72,6 @@ public class ThemedGuiModClient implements ClientModInitializer {
 					client.setScreen(new ThemedConfigScreen(null, REGISTRY));
 				}
 			}
-
-			while (toggleAutoMiningKey.consumeClick()) {
-				CONFIG.autoMiningEnabled = !CONFIG.autoMiningEnabled;
-				REGISTRY.save();
-
-				if (CONFIG.autoMiningEnabled && CONFIG.miningMode == ThemedGuiConfig.MiningMode.ROUTE) {
-					// Load sample route when enabling route mining
-					MiningRoute sampleRoute = routeManager.getRoute("sample_route");
-					if (sampleRoute != null) {
-						sampleRoute.setLoop(CONFIG.routeLoop);
-						routeMiner.setRoute(sampleRoute);
-						routeMiner.setBaseDelay(CONFIG.miningDelay);
-					}
-				}
-
-				client.player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-						"Auto Mining " + (CONFIG.autoMiningEnabled ? "enabled" : "disabled") +
-								" (" + CONFIG.miningMode + ")"
-				));
-			}
-
-			// Tick auto miners based on mode
-			if (CONFIG.autoMiningEnabled) {
-				if (CONFIG.miningMode == ThemedGuiConfig.MiningMode.SIMPLE) {
-					autoMiner.tick();
-				} else if (CONFIG.miningMode == ThemedGuiConfig.MiningMode.ROUTE) {
-					routeMiner.tick();
-				}
-			}
 		});
-
-		HudElementRegistry.attachElementBefore(
-				VanillaHudElements.CHAT,
-				Identifier.fromNamespaceAndPath(MOD_ID, "overlay"),
-				ThemedHud::extract
-		);
 	}
 }
