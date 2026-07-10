@@ -1,13 +1,16 @@
 package com.example.themedgui.client;
 
+import com.example.themedgui.client.api.AddonManager;
 import com.example.themedgui.client.config.SettingRegistry;
 import com.example.themedgui.client.config.ThemedGuiConfig;
 import com.example.themedgui.client.hud.OverlayPositionStore;
 import com.example.themedgui.client.hud.ThemedHud;
 import com.example.themedgui.client.ui.OverlayPositionScreen;
 import com.example.themedgui.client.ui.ThemedConfigScreen;
+import com.example.themedgui.client.ui.ThemedGuiHubScreen;
 import com.example.themedgui.client.ui.UiSettings;
 import com.example.themedgui.client.ui.UiSettingsScreen;
+import java.util.List;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -69,7 +72,10 @@ public class ThemedGuiModClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (openConfigKey.consumeClick()) {
 				if (client.screen == null) {
-					client.setScreen(new ThemedConfigScreen(null, REGISTRY));
+					// "themedgui" itself is always the first row; other mods show up
+					// automatically via their "themedgui:addon" entrypoint.
+					var ownEntry = new AddonManager.AddonEntry(MOD_ID, "Themed GUI Demo", null, REGISTRY);
+					client.setScreen(new ThemedGuiHubScreen(List.of(ownEntry)));
 				}
 			}
 		});

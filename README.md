@@ -158,6 +158,42 @@ the latest numbers before you build**, since these move fast:
 
 All of these live in `gradle.properties`.
 
+## Addon API: registering other mods into ThemedGuiMod's hub
+
+Pressing **O** now opens a hub screen (a mod list on the left) instead of
+jumping straight into ThemedGuiMod's own settings. ThemedGuiMod is the first
+row; any other mod can add itself as another row by exposing a
+`themedgui:addon` entrypoint - no dependency on ThemedGuiMod's internals
+beyond the `api` package, and no editing of ThemedGuiMod's own files.
+
+**In your own mod**, add a config class (same shape as any `SettingRegistry`
+config - see "Quick start" above) and an addon class:
+
+```java
+public class MyThemedGuiAddon implements ThemedGuiAddon {
+    @Override
+    public void register(AddonRegistration registration) {
+        registration.registerMod("mymod", "My Mod", MyModConfig.INSTANCE,
+                Identifier.of("mymod", "textures/gui/logo.png")); // icon is optional, pass null for none
+    }
+}
+```
+
+Then declare the entrypoint in your mod's `fabric.mod.json`:
+
+```json
+"entrypoints": {
+  "themedgui:addon": [ "com.mymod.MyThemedGuiAddon" ]
+},
+"depends": { "themedgui": "*" }
+```
+
+That's it - open the hub (press O) and "My Mod" appears in the list;
+clicking it opens a full `ThemedConfigScreen` built from `MyModConfig`,
+themed and searchable exactly like ThemedGuiMod's own settings. Multiple
+mods can register at once; each gets its own row and its own
+`<modId>.json` config file.
+
 ## Where to go from here
 
 - **Porting to a new mod**: copy `config/` and `ui/` wholesale into the new
