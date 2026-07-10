@@ -21,20 +21,20 @@ to write:
 
 ```java
 public class MyModConfig {
-    @Setting(category = "General", label = "Enable feature", tooltip = "Turns the whole thing on or off")
-    public boolean enabled = true;
+  @Setting(category = "General", label = "Enable feature", tooltip = "Turns the whole thing on or off")
+  public boolean enabled = true;
 
-    @Setting(category = "Appearance", label = "Scale", tooltip = "0.5x - 2.0x", min = 0.5, max = 2.0)
-    public float scale = 1.0f;
+  @Setting(category = "Appearance", label = "Scale", tooltip = "0.5x - 2.0x", min = 0.5, max = 2.0)
+  public float scale = 1.0f;
 
-    @Setting(category = "Appearance", label = "Overlay color", color = true)
-    public int overlayColor = 0x33AAFF;
+  @Setting(category = "Appearance", label = "Overlay color", color = true)
+  public int overlayColor = 0x33AAFF;
 
-    @Setting(category = "Appearance", label = "Position")
-    public MyEnum position = MyEnum.TOP_LEFT; // any enum field becomes a cycling ENUM row
+  @Setting(category = "Appearance", label = "Position")
+  public MyEnum position = MyEnum.TOP_LEFT; // any enum field becomes a cycling ENUM row
 
-    @Setting(category = "Advanced", label = "Reset stats", tooltip = "Clears saved stats")
-    public Runnable resetStats = () -> { /* ... */ }; // Runnable fields become an ACTION row
+  @Setting(category = "Advanced", label = "Reset stats", tooltip = "Clears saved stats")
+  public Runnable resetStats = () -> { /* ... */ }; // Runnable fields become an ACTION row
 }
 ```
 
@@ -56,10 +56,10 @@ public static SettingRegistry REGISTRY;
 
 @Override
 public void onInitializeClient() {
-    REGISTRY = new SettingRegistry("mymod", CONFIG); // scans, loads mymod.json from the config dir
-    // open the screen from a keybind, a button, wherever:
-    client.setScreen(new ThemedConfigScreen(parent, REGISTRY,
-            new ScreenBranding("My Mod", Identifier.of("mymod", "textures/gui/logo.png"))));
+  REGISTRY = new SettingRegistry("mymod", CONFIG); // scans, loads mymod.json from the config dir
+  // open the screen from a keybind, a button, wherever:
+  client.setScreen(new ThemedConfigScreen(parent, REGISTRY,
+          new ScreenBranding("My Mod", Identifier.of("mymod", "textures/gui/logo.png"))));
 }
 ```
 
@@ -158,6 +158,49 @@ the latest numbers before you build**, since these move fast:
 
 All of these live in `gradle.properties`.
 
+## Consuming ThemedGuiMod from another mod (dependency setup)
+
+Before another mod can register as an addon, it needs the jar on its
+classpath. The simplest, least error-prone way (no Maven repo/location
+confusion):
+
+1. **Build ThemedGuiMod:**
+   ```
+   gradlew.bat build          # Windows
+   ./gradlew build            # macOS/Linux
+   ```
+   This produces `build/libs/themedgui-1.0.0.jar`.
+
+2. **Copy that jar** into your own mod's `libs/` folder (create it if it
+   doesn't exist yet), e.g. `your-mod/libs/themedgui-1.0.0.jar`.
+
+3. **In your own mod's `build.gradle`**, add it as a plain file dependency:
+   ```gradle
+   dependencies {
+       implementation files("libs/themedgui-1.0.0.jar")
+   }
+   ```
+   Note: this is `implementation`, **not** `modImplementation`. MC 26.1's
+   Loom setup (see "Version notes" below) doesn't use the classic
+   Yarn/intermediary remap step, so this template doesn't use `mod*`-prefixed
+   configurations anywhere - matching how `fabric-loader`/`fabric-api` are
+   already declared above in this same file.
+
+4. **In your own mod's `fabric.mod.json`**, declare the dependency:
+   ``` json
+   "depends": { "themedgui": "*" }
+   ```
+
+Re-run your build after copying a newer jar in - Gradle won't pick up an
+in-place file change to `libs/themedgui-1.0.0.jar` unless the build actually
+re-reads it, so when in doubt use `gradlew.bat build --refresh-dependencies`
+after replacing it.
+
+(`mavenLocal()` + `publishToMavenLocal` also works and avoids manually
+copying a jar around, but is easy to get wrong the first time - stale
+`.m2` caches, wrong repo path, etc. The `libs/` approach above has fewer
+moving parts if this is your first time wiring two mods together.)
+
 ## Addon API: registering other mods into ThemedGuiMod's hub
 
 Pressing **O** now opens a hub screen (a mod list on the left) instead of
@@ -181,7 +224,7 @@ public class MyThemedGuiAddon implements ThemedGuiAddon {
 
 Then declare the entrypoint in your mod's `fabric.mod.json`:
 
-```json
+``` json
 "entrypoints": {
   "themedgui:addon": [ "com.mymod.MyThemedGuiAddon" ]
 },
@@ -193,6 +236,41 @@ clicking it opens a full `ThemedConfigScreen` built from `MyModConfig`,
 themed and searchable exactly like ThemedGuiMod's own settings. Multiple
 mods can register at once; each gets its own row and its own
 `<modId>.json` config file.
+
+### Troubleshooting
+
+**`error: package com.example.themedgui.client.api does not exist`**
+(or "symbol not found: class ThemedGuiAddon") when compiling the addon mod -
+the jar you're depending on doesn't actually contain the `api`/`ui`/`config`
+classes. This project's entire codebase lives under `src/client/java`
+(there's no `src/main/java`), so the plain `jar` task needs an explicit
+`from sourceSets.client.output` line, or the built jar will be nearly empty.
+Confirm the jar's contents directly:
+```
+jar tf build\libs\themedgui-1.0.0.jar
+```
+and check that `com/example/themedgui/client/api/AddonRegistration.class`
+(and friends) show up. If they don't, make sure `homage-themed-gui/build.gradle`
+has:
+```gradle
+jar {
+    inputs.property "archivesName", project.base.archivesName
+    from sourceSets.client.output
+}
+```
+then `gradlew.bat clean build` again and re-copy the jar into the consumer
+mod's `libs/` folder.
+
+**IDEA still shows red/unresolved imports after a successful command-line
+build** - IDEA's project model just hasn't refreshed. Use the Gradle tool
+window's "Reload All Gradle Projects" button, or
+`File > Invalidate Caches... > Invalidate and Restart` if that doesn't clear
+it.
+
+**Editing this repo through a patch file instead of a fresh clone** - from
+this repo's root (the folder containing `.git`), `git apply your-patch.patch`
+applies it in place; add `--whitespace=fix` if you hit whitespace-related
+apply errors.
 
 ## Where to go from here
 
