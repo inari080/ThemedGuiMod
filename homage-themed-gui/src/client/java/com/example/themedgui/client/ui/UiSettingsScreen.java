@@ -5,6 +5,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
+import java.util.List;
+
 /**
  * Dedicated theme-picker screen with live palette previews. Opened from the
  * "UI Settings" action row in {@link ThemedConfigScreen}.
@@ -30,13 +32,14 @@ public class UiSettingsScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
-        UiPalette palette = UiPalette.forTheme(previewTheme);
+        UiPalette palette = previewTheme.palette();
         float alpha = transition.currentAlpha();
 
         graphics.fill(0, 0, this.width, this.height, withAlpha(palette.backdrop(), alpha));
         AmbientBackdrop.drawBlobs(graphics, this.width, this.height, palette.accent(), alpha);
 
-        int panelW = UiTheme.values().length * CARD_WIDTH + (UiTheme.values().length - 1) * CARD_GAP + PANEL_PADDING * 2;
+        List<UiTheme> themes = UiTheme.values();
+        int panelW = themes.size() * CARD_WIDTH + (themes.size() - 1) * CARD_GAP + PANEL_PADDING * 2;
         int panelH = CARD_HEIGHT + 72;
         int panelX = (this.width - panelW) / 2;
         int panelY = (this.height - panelH) / 2;
@@ -58,8 +61,8 @@ public class UiSettingsScreen extends Screen {
             int cardsY = panelY + 52;
             int cardsX = panelX + PANEL_PADDING;
 
-            for (int i = 0; i < UiTheme.values().length; i++) {
-                UiTheme theme = UiTheme.values()[i];
+            for (int i = 0; i < themes.size(); i++) {
+                UiTheme theme = themes.get(i);
                 int cardX = cardsX + i * (CARD_WIDTH + CARD_GAP);
                 boolean isSelected = theme == selected;
                 boolean isHovered = isInside(mouseX, mouseY, cardX, cardsY, CARD_WIDTH, CARD_HEIGHT);
@@ -92,7 +95,7 @@ public class UiSettingsScreen extends Screen {
     }
 
     private void drawThemeCard(GuiGraphicsExtractor graphics, UiTheme theme, int x, int y, float alpha, boolean selected) {
-        UiPalette cardPalette = UiPalette.forTheme(theme);
+        UiPalette cardPalette = theme.palette();
 
         graphics.fill(x, y, x + CARD_WIDTH, y + CARD_HEIGHT - 18, withAlpha(cardPalette.paper(), alpha));
         graphics.fill(x, y, x + CARD_WIDTH, y + 14, withAlpha(cardPalette.header(), alpha));
@@ -119,15 +122,16 @@ public class UiSettingsScreen extends Screen {
         int mouseX = (int) event.x();
         int mouseY = (int) event.y();
 
-        int panelW = UiTheme.values().length * CARD_WIDTH + (UiTheme.values().length - 1) * CARD_GAP + PANEL_PADDING * 2;
+        List<UiTheme> themes = UiTheme.values();
+        int panelW = themes.size() * CARD_WIDTH + (themes.size() - 1) * CARD_GAP + PANEL_PADDING * 2;
         int panelH = CARD_HEIGHT + 72;
         int panelX = (this.width - panelW) / 2;
         int panelY = (this.height - panelH) / 2;
         int cardsY = panelY + 52;
         int cardsX = panelX + PANEL_PADDING;
 
-        for (int i = 0; i < UiTheme.values().length; i++) {
-            UiTheme theme = UiTheme.values()[i];
+        for (int i = 0; i < themes.size(); i++) {
+            UiTheme theme = themes.get(i);
             int cardX = cardsX + i * (CARD_WIDTH + CARD_GAP);
             if (isInside(mouseX, mouseY, cardX, cardsY, CARD_WIDTH, CARD_HEIGHT)) {
                 UiSettings.INSTANCE.setTheme(theme);

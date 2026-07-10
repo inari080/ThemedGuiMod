@@ -106,7 +106,7 @@ public class ColorPickerScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
-        UiPalette palette = UiPalette.forTheme(theme);
+        UiPalette palette = theme.palette();
 
         graphics.fill(0, 0, this.width, this.height, palette.backdrop());
         graphics.fill(panelX, panelY, panelX + panelW, panelY + panelH, palette.panel());

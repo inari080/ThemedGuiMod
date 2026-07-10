@@ -38,10 +38,7 @@ public final class UiSettings {
             String json = Files.readString(FILE);
             Data data = GSON.fromJson(json, Data.class);
             if (data != null && data.theme != null) {
-                try {
-                    theme = UiTheme.valueOf(data.theme);
-                } catch (IllegalArgumentException ignored) {
-                }
+                theme = UiTheme.byId(data.theme);
             }
         } catch (IOException ignored) {
         }
@@ -62,7 +59,7 @@ public final class UiSettings {
         try {
             Files.createDirectories(FILE.getParent());
             Data data = new Data();
-            data.theme = theme.name();
+            data.theme = theme.id();
             Files.writeString(FILE, GSON.toJson(data));
         } catch (IOException ignored) {
         }

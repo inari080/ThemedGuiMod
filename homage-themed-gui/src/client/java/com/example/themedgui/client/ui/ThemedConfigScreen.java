@@ -2,12 +2,14 @@ package com.example.themedgui.client.ui;
 
 import com.example.themedgui.client.config.SettingNode;
 import com.example.themedgui.client.config.SettingRegistry;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -57,10 +59,17 @@ public class ThemedConfigScreen extends Screen {
 		}
 	}
 
+	private final ScreenBranding branding;
+
 	public ThemedConfigScreen(Screen parent, SettingRegistry registry) {
-		super(Component.literal("Themed GUI Demo"));
+		this(parent, registry, new ScreenBranding("Themed GUI Demo"));
+	}
+
+	public ThemedConfigScreen(Screen parent, SettingRegistry registry, ScreenBranding branding) {
+		super(Component.literal(branding.title()));
 		this.parent = parent;
 		this.registry = registry;
+		this.branding = branding;
 	}
 
 	@Override
@@ -149,7 +158,7 @@ public class ThemedConfigScreen extends Screen {
 
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
-		UiPalette palette = UiPalette.forTheme(theme);
+		UiPalette palette = theme.palette();
 		List<String> categories = registry.categories();
 		Layout layout = layout();
 		boolean searching = isSearching();
@@ -185,7 +194,14 @@ public class ThemedConfigScreen extends Screen {
 
 			// Header bar
 			graphics.fill(panelX, panelY, panelX + panelW, panelY + HEADER_HEIGHT, withAlpha(palette.header(), alpha));
-			graphics.text(this.font, this.title, panelX + 12, panelY + 10, withAlpha(palette.text(), alpha), false);
+			int titleX = panelX + 12;
+			if (branding.logo() != null) {
+				int logoSize = 16;
+				int logoY = panelY + (HEADER_HEIGHT - logoSize) / 2;
+				graphics.blit(RenderPipelines.GUI_TEXTURED, branding.logo(), titleX, logoY, 0, 0, logoSize, logoSize, logoSize, logoSize);
+				titleX += logoSize + 6;
+			}
+			graphics.text(this.font, this.title, titleX, panelY + 10, withAlpha(palette.text(), alpha), false);
 			graphics.fill(panelX, panelY + HEADER_HEIGHT - 1, panelX + panelW, panelY + HEADER_HEIGHT, withAlpha(palette.line(), alpha));
 
 			int sidebarX = panelX;
@@ -214,7 +230,14 @@ public class ThemedConfigScreen extends Screen {
 					}
 				}
 				int textColor = isSelected ? palette.text() : palette.mutedText();
-				graphics.text(this.font, categories.get(i), sidebarX + 12, rowY + 6, withAlpha(textColor, alpha), false);
+				int labelX = sidebarX + 12;
+				Identifier catIcon = registry.categoryIcon(categories.get(i));
+				if (catIcon != null) {
+					int iconSize = 12;
+					graphics.blit(RenderPipelines.GUI_TEXTURED, catIcon, labelX, rowY + 5, 0, 0, iconSize, iconSize, iconSize, iconSize);
+					labelX += iconSize + 4;
+				}
+				graphics.text(this.font, categories.get(i), labelX, rowY + 6, withAlpha(textColor, alpha), false);
 			}
 
 			int contentX = layout.contentX();
@@ -262,7 +285,13 @@ public class ThemedConfigScreen extends Screen {
 				}
 
 				String label = searching ? "[" + node.category() + "] " + node.label() : node.label();
-				graphics.text(this.font, label, contentX + 14 + rowX, rowY + 6, withAlpha(palette.text(), rowAlphaMul), false);
+				int labelX = contentX + 14 + rowX;
+				if (node.icon() != null) {
+					int iconSize = 12;
+					graphics.blit(RenderPipelines.GUI_TEXTURED, node.icon(), labelX, rowY + 5, 0, 0, iconSize, iconSize, iconSize, iconSize);
+					labelX += iconSize + 4;
+				}
+				graphics.text(this.font, label, labelX, rowY + 6, withAlpha(palette.text(), rowAlphaMul), false);
 				if (!node.tooltip().isEmpty()) {
 					graphics.text(this.font, node.tooltip(), contentX + 14 + rowX, rowY + 6 + this.font.lineHeight,
 							withAlpha(palette.mutedText(), rowAlphaMul), false);

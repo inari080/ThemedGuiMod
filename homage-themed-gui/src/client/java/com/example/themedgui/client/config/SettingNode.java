@@ -1,10 +1,12 @@
 package com.example.themedgui.client.config;
 
+import net.minecraft.resources.Identifier;
+
 import java.lang.reflect.Field;
 
 public class SettingNode {
 
-    public enum Kind { TOGGLE, SLIDER, TEXT, ACTION, ENUM, COLOR, SECTION_HEADER }
+    public enum Kind { TOGGLE, SLIDER, TEXT, ACTION, ENUM, COLOR }
 
     private final Object holder;
     private final Field field;
@@ -14,9 +16,10 @@ public class SettingNode {
     private final Kind kind;
     private final double min;
     private final double max;
+    private final Identifier icon;
 
     public SettingNode(Object holder, Field field, String category, String label,
-                       String tooltip, Kind kind, double min, double max) {
+                       String tooltip, Kind kind, double min, double max, String iconPath) {
         this.holder = holder;
         this.field = field;
         this.category = category;
@@ -25,6 +28,7 @@ public class SettingNode {
         this.kind = kind;
         this.min = min;
         this.max = max;
+        this.icon = (iconPath == null || iconPath.isEmpty()) ? null : Identifier.tryParse(iconPath);
         field.setAccessible(true);
     }
 
@@ -32,6 +36,8 @@ public class SettingNode {
     public String label() { return label; }
     public String tooltip() { return tooltip; }
     public Kind kind() { return kind; }
+    /** 16x16-recommended texture to draw before the label, or null if this setting has no icon. */
+    public Identifier icon() { return icon; }
 
     // --- TOGGLE ---
     public boolean getBoolean() {

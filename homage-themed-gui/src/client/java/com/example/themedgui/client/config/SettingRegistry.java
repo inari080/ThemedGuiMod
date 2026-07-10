@@ -3,6 +3,7 @@ package com.example.themedgui.client.config;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.resources.Identifier;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -36,9 +37,7 @@ public class SettingRegistry {
 
             SettingNode.Kind kind;
             Class<?> type = field.getType();
-            if (ann.sectionHeader()) {
-                kind = SettingNode.Kind.SECTION_HEADER;
-            } else if (type == boolean.class) {
+            if (type == boolean.class) {
                 kind = SettingNode.Kind.TOGGLE;
             } else if (type == int.class && ann.color()) {
                 kind = SettingNode.Kind.COLOR;
@@ -53,9 +52,21 @@ public class SettingRegistry {
             }
 
             SettingNode node = new SettingNode(holder, field, ann.category(), ann.label(),
-                    ann.tooltip(), kind, ann.min(), ann.max());
+                    ann.tooltip(), kind, ann.min(), ann.max(), ann.icon());
             byCategory.computeIfAbsent(ann.category(), k -> new ArrayList<>()).add(node);
         }
+    }
+
+    private final Map<String, Identifier> categoryIcons = new HashMap<>();
+
+    /** Registers an icon for a category tab in the sidebar. Call from your mod's client init. */
+    public void setCategoryIcon(String category, Identifier icon) {
+        categoryIcons.put(category, icon);
+    }
+
+    /** 16x16-recommended icon for the given category, or null if none was registered. */
+    public Identifier categoryIcon(String category) {
+        return categoryIcons.get(category);
     }
 
     public List<String> categories() {
