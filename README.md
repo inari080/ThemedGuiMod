@@ -9,6 +9,10 @@ Started as a from-scratch homage to the look and feel of slicker mod config
 screens (Joo0n Reimagined's, specifically); has since grown into something
 meant to be **dropped into future mods**, not just this demo one.
 
+## Screenshots
+![Demo screenshot](![img.png](homage-themed-gui/imgfile/img.png)img.png)
+
+![Demo screenshot](![img_1.png](homage-themed-gui/imgfile/img_1.png))
 ## Quick start: adding a setting
 
 Add a field to your config class and annotate it - that's it, no screen code
