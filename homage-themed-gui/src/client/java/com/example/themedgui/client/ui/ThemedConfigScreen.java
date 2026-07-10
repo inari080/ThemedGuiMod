@@ -4,7 +4,6 @@ import com.example.themedgui.client.config.SettingNode;
 import com.example.themedgui.client.config.SettingRegistry;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -46,7 +45,7 @@ public class ThemedConfigScreen extends Screen {
 	private long categorySwitchTime = System.currentTimeMillis();
 	private int categorySlideDir = 1;
 
-	private Button themeButton;
+	private int themeButtonX, themeButtonY, themeButtonW, themeButtonH;
 	private EditBox searchBox;
 	private SettingNode draggingSlider = null;
 	private boolean draggingScrollbar = false;
@@ -77,16 +76,14 @@ public class ThemedConfigScreen extends Screen {
 		int panelRight = this.width - 20; // matches panelX(20) + panelW(width-40)
 		int controlY = 20 + 4; // panelY(20) + 4px inset, keeps controls inside the HEADER_HEIGHT(28) stripe
 
-		themeButton = Button.builder(themeButtonLabel(), btn -> {
-			theme = theme.next();
-			UiSettings.INSTANCE.setTheme(theme);
-			btn.setMessage(themeButtonLabel());
-			toasts.show("Theme saved");
-		}).bounds(panelRight - 8 - 108, controlY, 108, 20).build();
-		this.addRenderableWidget(themeButton);
+		themeButtonW = 108;
+		themeButtonH = 20;
+		themeButtonX = panelRight - 8 - themeButtonW;
+		themeButtonY = controlY;
 
-		searchBox = new EditBox(this.font, panelRight - 8 - 108 - 8 - SEARCH_BOX_WIDTH, controlY, SEARCH_BOX_WIDTH, 20,
+		searchBox = new EditBox(this.font, themeButtonX - 8 - SEARCH_BOX_WIDTH, controlY, SEARCH_BOX_WIDTH, 20,
 				Component.literal("Search"));
+		searchBox.setBordered(false); // we draw our own themed background/border each frame instead
 		searchBox.setSuggestion("Search settings...");
 		searchBox.setResponder(value -> scroll.jumpTo(0));
 		this.addRenderableWidget(searchBox);
@@ -94,6 +91,32 @@ public class ThemedConfigScreen extends Screen {
 
 	private Component themeButtonLabel() {
 		return Component.literal("Theme: " + theme.getDisplayName());
+	}
+
+	private boolean isThemeButtonHovered(int mouseX, int mouseY) {
+		return isInside(mouseX, mouseY, themeButtonX, themeButtonY, themeButtonW, themeButtonH);
+	}
+
+	/** Draws the theme-cycle button and the search field's themed background/border, using the current palette. */
+	private void drawHeaderControls(GuiGraphicsExtractor graphics, UiPalette palette, int mouseX, int mouseY, float alpha) {
+		// Search field backing chip, matching the "field" style used elsewhere (sliders etc.)
+		int searchX = searchBox.getX() - 4;
+		int searchY = searchBox.getY() - 2;
+		int searchW = SEARCH_BOX_WIDTH + 8;
+		int searchH = 24;
+		graphics.fill(searchX, searchY, searchX + searchW, searchY + searchH, withAlpha(palette.field(), alpha));
+		graphics.outline(searchX, searchY, searchW, searchH, withAlpha(palette.line(), alpha));
+		searchBox.setTextColor(palette.fieldText());
+		searchBox.setTextColorUneditable(palette.mutedText());
+
+		// Theme button, styled like the ACTION-row chips rather than a vanilla stone button
+		boolean hovered = isThemeButtonHovered(mouseX, mouseY);
+		int bg = hovered ? palette.hover() : palette.field();
+		graphics.fill(themeButtonX, themeButtonY, themeButtonX + themeButtonW, themeButtonY + themeButtonH, withAlpha(bg, alpha));
+		graphics.outline(themeButtonX, themeButtonY, themeButtonW, themeButtonH, withAlpha(hovered ? palette.accent() : palette.line(), alpha));
+		String label = themeButtonLabel().getString();
+		int textW = this.font.width(label);
+		graphics.text(this.font, label, themeButtonX + (themeButtonW - textW) / 2, themeButtonY + 6, withAlpha(palette.text(), alpha), false);
 	}
 
 	private boolean isSearching() {
@@ -108,9 +131,6 @@ public class ThemedConfigScreen extends Screen {
 	/** Called by UiSettingsScreen when the user picks a theme card. */
 	public void setTheme(UiTheme theme) {
 		this.theme = theme;
-		if (themeButton != null) {
-			themeButton.setMessage(themeButtonLabel());
-		}
 	}
 
 	/** Rows to display: the selected category normally, or a flattened cross-category match list while searching. */
@@ -203,6 +223,7 @@ public class ThemedConfigScreen extends Screen {
 			}
 			graphics.text(this.font, this.title, titleX, panelY + 10, withAlpha(palette.text(), alpha), false);
 			graphics.fill(panelX, panelY + HEADER_HEIGHT - 1, panelX + panelW, panelY + HEADER_HEIGHT, withAlpha(palette.line(), alpha));
+			drawHeaderControls(graphics, palette, mouseX, mouseY, alpha);
 
 			int sidebarX = panelX;
 			int sidebarY = panelY + HEADER_HEIGHT;
@@ -404,6 +425,14 @@ public class ThemedConfigScreen extends Screen {
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
 		int mouseX = (int) event.x();
 		int mouseY = (int) event.y();
+
+		if (isThemeButtonHovered(mouseX, mouseY)) {
+			theme = theme.next();
+			UiSettings.INSTANCE.setTheme(theme);
+			toasts.show("Theme saved");
+			return true;
+		}
+
 		List<String> categories = registry.categories();
 
 		int panelX = 20;
